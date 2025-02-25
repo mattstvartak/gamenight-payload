@@ -15,11 +15,11 @@ export const Users: CollectionConfig = {
       unique: true,
     },
     {
-      name: "first Name",
+      name: "firstName",
       type: "text",
     },
     {
-      name: "last Name",
+      name: "lastName",
       type: "text",
     },
     {
@@ -33,15 +33,25 @@ export const Users: CollectionConfig = {
     },
     {
       name: "libraries",
-      type: "relationship",
-      relationTo: "libraries",
-      hasMany: true,
+      type: "array",
+      fields: [
+        {
+          name: "library",
+          type: "relationship",
+          relationTo: "libraries",
+        }
+      ]
     },
     {
-      name: "game nights",
-      type: "relationship",
-      relationTo: "gamenights",
-      hasMany: true,
+      name: "gameNights",
+      type: "array",
+      fields: [
+        {
+          name: "game night",
+          type: "relationship",
+          relationTo: "gamenights",
+        }
+      ]
     },
     {
       name: "friends",

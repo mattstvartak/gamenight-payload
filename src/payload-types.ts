@@ -127,11 +127,21 @@ export interface UserAuthOperations {
 export interface User {
   id: number;
   username: string;
-  'first Name'?: string | null;
-  'last Name'?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   phone?: number | null;
-  libraries?: (number | Library)[] | null;
-  'game nights'?: (number | Gamenight)[] | null;
+  libraries?:
+    | {
+        library?: (number | null) | Library;
+        id?: string | null;
+      }[]
+    | null;
+  gameNights?:
+    | {
+        'game night'?: (number | null) | Gamenight;
+        id?: string | null;
+      }[]
+    | null;
   friends?:
     | {
         friend?: (number | User)[] | null;
@@ -361,11 +371,21 @@ export interface PayloadMigration {
  */
 export interface UsersSelect<T extends boolean = true> {
   username?: T;
-  'first Name'?: T;
-  'last Name'?: T;
+  firstName?: T;
+  lastName?: T;
   phone?: T;
-  libraries?: T;
-  'game nights'?: T;
+  libraries?:
+    | T
+    | {
+        library?: T;
+        id?: T;
+      };
+  gameNights?:
+    | T
+    | {
+        'game night'?: T;
+        id?: T;
+      };
   friends?:
     | T
     | {
