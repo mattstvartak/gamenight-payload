@@ -5,7 +5,6 @@ export const Games: CollectionConfig = {
   admin: {
     useAsTitle: "name",
   },
-  auth: true,
   fields: [
     {
       name: "name",
@@ -20,5 +19,42 @@ export const Games: CollectionConfig = {
       type: "upload",
       relationTo: "media",
     },
+    {
+      name: "affiliate link",
+      type: "text",
+    },
+    {
+      name: "type",
+      type: "select",
+      options: ["boardgame", "videogame", "cardgame", "tabletop","other"],
+    },
+    {
+      name: "minPlayers",
+      type: "number",
+    },
+    {
+      name: "maxPlayers",
+      type: "number",
+    },
+    {
+      name: "minPlaytime",
+      type: "number",
+    },
+    {
+      name: "maxPlaytime",
+      type: "number",
+    },
+    {
+      name: "minAge",
+      type: "number",
+    },
+    {
+      name: "complexity",
+      type: "number",
+    }, 
+    {
+      name: "official link",
+      type: "text",
+    }
   ],
 };

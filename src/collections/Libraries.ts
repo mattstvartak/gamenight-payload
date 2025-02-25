@@ -5,7 +5,6 @@ export const Libraries: CollectionConfig = {
   admin: {
     useAsTitle: "name",
   },
-  auth: true,
   fields: [
     {
       name: "name",
@@ -15,5 +14,16 @@ export const Libraries: CollectionConfig = {
       name: "description",
       type: "text",
     },
+    {
+      name: "games",
+      type: "array",
+      fields: [
+        {
+          name: "game",
+          type: "relationship",
+          relationTo: "games",
+        }
+      ]
+    }
   ],
 };

@@ -12,7 +12,6 @@ import { Media } from "./collections/Media";
 import { Libraries } from "./collections/Libraries";
 import { Notes } from "./collections/Notes";
 import { GameNights } from "./collections/GameNights";
-import { Friends } from "./collections/Friends";
 import { Games } from "./collections/Games";
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -24,7 +23,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media, Libraries, Notes, GameNights, Friends, Games],
+  collections: [Users, Media, Libraries, Notes, GameNights, Games],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || "",
   typescript: {

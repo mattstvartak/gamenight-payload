@@ -63,11 +63,6 @@ export type SupportedTimezones =
 export interface Config {
   auth: {
     users: UserAuthOperations;
-    libraries: LibraryAuthOperations;
-    notes: NoteAuthOperations;
-    gamenights: GamenightAuthOperations;
-    friends: FriendAuthOperations;
-    games: GameAuthOperations;
   };
   blocks: {};
   collections: {
@@ -76,7 +71,6 @@ export interface Config {
     libraries: Library;
     notes: Note;
     gamenights: Gamenight;
-    friends: Friend;
     games: Game;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -89,7 +83,6 @@ export interface Config {
     libraries: LibrariesSelect<false> | LibrariesSelect<true>;
     notes: NotesSelect<false> | NotesSelect<true>;
     gamenights: GamenightsSelect<false> | GamenightsSelect<true>;
-    friends: FriendsSelect<false> | FriendsSelect<true>;
     games: GamesSelect<false> | GamesSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -101,25 +94,9 @@ export interface Config {
   globals: {};
   globalsSelect: {};
   locale: null;
-  user:
-    | (User & {
-        collection: 'users';
-      })
-    | (Library & {
-        collection: 'libraries';
-      })
-    | (Note & {
-        collection: 'notes';
-      })
-    | (Gamenight & {
-        collection: 'gamenights';
-      })
-    | (Friend & {
-        collection: 'friends';
-      })
-    | (Game & {
-        collection: 'games';
-      });
+  user: User & {
+    collection: 'users';
+  };
   jobs: {
     tasks: unknown;
     workflows: unknown;
@@ -143,106 +120,31 @@ export interface UserAuthOperations {
     password: string;
   };
 }
-export interface LibraryAuthOperations {
-  forgotPassword: {
-    email: string;
-    password: string;
-  };
-  login: {
-    email: string;
-    password: string;
-  };
-  registerFirstUser: {
-    email: string;
-    password: string;
-  };
-  unlock: {
-    email: string;
-    password: string;
-  };
-}
-export interface NoteAuthOperations {
-  forgotPassword: {
-    email: string;
-    password: string;
-  };
-  login: {
-    email: string;
-    password: string;
-  };
-  registerFirstUser: {
-    email: string;
-    password: string;
-  };
-  unlock: {
-    email: string;
-    password: string;
-  };
-}
-export interface GamenightAuthOperations {
-  forgotPassword: {
-    email: string;
-    password: string;
-  };
-  login: {
-    email: string;
-    password: string;
-  };
-  registerFirstUser: {
-    email: string;
-    password: string;
-  };
-  unlock: {
-    email: string;
-    password: string;
-  };
-}
-export interface FriendAuthOperations {
-  forgotPassword: {
-    email: string;
-    password: string;
-  };
-  login: {
-    email: string;
-    password: string;
-  };
-  registerFirstUser: {
-    email: string;
-    password: string;
-  };
-  unlock: {
-    email: string;
-    password: string;
-  };
-}
-export interface GameAuthOperations {
-  forgotPassword: {
-    email: string;
-    password: string;
-  };
-  login: {
-    email: string;
-    password: string;
-  };
-  registerFirstUser: {
-    email: string;
-    password: string;
-  };
-  unlock: {
-    email: string;
-    password: string;
-  };
-}
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
  */
 export interface User {
   id: number;
+  username: string;
+  'first Name'?: string | null;
+  'last Name'?: string | null;
+  phone?: number | null;
   libraries?: (number | Library)[] | null;
-  gamenights?: (number | Gamenight)[] | null;
-  friends?: (number | null) | Friend;
-  notes?: (number | Note)[] | null;
+  'game nights'?: (number | Gamenight)[] | null;
+  friends?:
+    | {
+        friend?: (number | User)[] | null;
+        id?: string | null;
+      }[]
+    | null;
+  notebooks?:
+    | {
+        notes?: (number | Note)[] | null;
+        id?: string | null;
+      }[]
+    | null;
+  avatar?: (number | null) | Media;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -262,16 +164,54 @@ export interface Library {
   id: number;
   name?: string | null;
   description?: string | null;
+  games?:
+    | {
+        game?: (number | null) | Game;
+        id?: string | null;
+      }[]
+    | null;
   updatedAt: string;
   createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  password?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "games".
+ */
+export interface Game {
+  id: number;
+  name?: string | null;
+  description?: string | null;
+  image?: (number | null) | Media;
+  'affiliate link'?: string | null;
+  type?: ('boardgame' | 'videogame' | 'cardgame' | 'tabletop' | 'other') | null;
+  minPlayers?: number | null;
+  maxPlayers?: number | null;
+  minPlaytime?: number | null;
+  maxPlaytime?: number | null;
+  minAge?: number | null;
+  complexity?: number | null;
+  'official link'?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "media".
+ */
+export interface Media {
+  id: number;
+  alt: string;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -301,21 +241,21 @@ export interface Gamenight {
    * @maxItems 2
    */
   location?: [number, number] | null;
-  notes?: (number | Note)[] | null;
-  users?: (number | User)[] | null;
-  games?: (number | Game)[] | null;
-  library?: (number | Library)[] | null;
+  players?:
+    | {
+        player?: (number | null) | User;
+        id?: string | null;
+      }[]
+    | null;
+  games?:
+    | {
+        game?: (number | null) | Game;
+        id?: string | null;
+      }[]
+    | null;
   recurring?: boolean | null;
   updatedAt: string;
   createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  password?: string | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -341,71 +281,6 @@ export interface Note {
   } | null;
   updatedAt: string;
   createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  password?: string | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "games".
- */
-export interface Game {
-  id: number;
-  name?: string | null;
-  description?: string | null;
-  image?: (number | null) | Media;
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  password?: string | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media".
- */
-export interface Media {
-  id: number;
-  alt: string;
-  updatedAt: string;
-  createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  focalX?: number | null;
-  focalY?: number | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "friends".
- */
-export interface Friend {
-  id: number;
-  friends?: (number | User)[] | null;
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  password?: string | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -435,39 +310,14 @@ export interface PayloadLockedDocument {
         value: number | Gamenight;
       } | null)
     | ({
-        relationTo: 'friends';
-        value: number | Friend;
-      } | null)
-    | ({
         relationTo: 'games';
         value: number | Game;
       } | null);
   globalSlug?: string | null;
-  user:
-    | {
-        relationTo: 'users';
-        value: number | User;
-      }
-    | {
-        relationTo: 'libraries';
-        value: number | Library;
-      }
-    | {
-        relationTo: 'notes';
-        value: number | Note;
-      }
-    | {
-        relationTo: 'gamenights';
-        value: number | Gamenight;
-      }
-    | {
-        relationTo: 'friends';
-        value: number | Friend;
-      }
-    | {
-        relationTo: 'games';
-        value: number | Game;
-      };
+  user: {
+    relationTo: 'users';
+    value: number | User;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -477,31 +327,10 @@ export interface PayloadLockedDocument {
  */
 export interface PayloadPreference {
   id: number;
-  user:
-    | {
-        relationTo: 'users';
-        value: number | User;
-      }
-    | {
-        relationTo: 'libraries';
-        value: number | Library;
-      }
-    | {
-        relationTo: 'notes';
-        value: number | Note;
-      }
-    | {
-        relationTo: 'gamenights';
-        value: number | Gamenight;
-      }
-    | {
-        relationTo: 'friends';
-        value: number | Friend;
-      }
-    | {
-        relationTo: 'games';
-        value: number | Game;
-      };
+  user: {
+    relationTo: 'users';
+    value: number | User;
+  };
   key?: string | null;
   value?:
     | {
@@ -531,10 +360,25 @@ export interface PayloadMigration {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  username?: T;
+  'first Name'?: T;
+  'last Name'?: T;
+  phone?: T;
   libraries?: T;
-  gamenights?: T;
-  friends?: T;
-  notes?: T;
+  'game nights'?: T;
+  friends?:
+    | T
+    | {
+        friend?: T;
+        id?: T;
+      };
+  notebooks?:
+    | T
+    | {
+        notes?: T;
+        id?: T;
+      };
+  avatar?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
@@ -570,15 +414,14 @@ export interface MediaSelect<T extends boolean = true> {
 export interface LibrariesSelect<T extends boolean = true> {
   name?: T;
   description?: T;
+  games?:
+    | T
+    | {
+        game?: T;
+        id?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -589,13 +432,6 @@ export interface NotesSelect<T extends boolean = true> {
   notes?: T;
   updatedAt?: T;
   createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -606,36 +442,21 @@ export interface GamenightsSelect<T extends boolean = true> {
   description?: T;
   date?: T;
   location?: T;
-  notes?: T;
-  users?: T;
-  games?: T;
-  library?: T;
+  players?:
+    | T
+    | {
+        player?: T;
+        id?: T;
+      };
+  games?:
+    | T
+    | {
+        game?: T;
+        id?: T;
+      };
   recurring?: T;
   updatedAt?: T;
   createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "friends_select".
- */
-export interface FriendsSelect<T extends boolean = true> {
-  friends?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -645,15 +466,17 @@ export interface GamesSelect<T extends boolean = true> {
   name?: T;
   description?: T;
   image?: T;
+  'affiliate link'?: T;
+  type?: T;
+  minPlayers?: T;
+  maxPlayers?: T;
+  minPlaytime?: T;
+  maxPlaytime?: T;
+  minAge?: T;
+  complexity?: T;
+  'official link'?: T;
   updatedAt?: T;
   createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

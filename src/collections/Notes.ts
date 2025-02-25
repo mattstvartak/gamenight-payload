@@ -2,10 +2,10 @@ import type { CollectionConfig } from "payload";
 
 export const Notes: CollectionConfig = {
   slug: "notes",
+  auth: false,
   admin: {
     useAsTitle: "name",
   },
-  auth: true,
   fields: [
     {
       name: "name",
