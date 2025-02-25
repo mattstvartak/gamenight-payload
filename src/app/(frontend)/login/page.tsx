@@ -8,10 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { gsap } from "gsap";
-import debounce from 'lodash/debounce';
-import { validatePassword, passwordRequirements, type PasswordValidation } from '@/utils/validation/password';
+import { validatePassword } from '@/utils/validation/password';
 import { isValidEmail } from '@/utils/validation/email';
 import { validateLoginForm, type ValidationErrors } from '@/utils/validation/form';
+import debounce from 'lodash/debounce';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -51,7 +51,7 @@ export default function LoginPage() {
       } finally {
         setIsCheckingEmail(false);
       }
-    }, 1000)
+    }, 500)
   );
 
   useEffect(() => {
@@ -75,11 +75,28 @@ export default function LoginPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleEmailBlur = () => {
+    if (email && !isValidEmail(email)) {
+      setErrors(prev => ({
+        ...prev,
+        email: 'Invalid email'
+      }));
+    }
+  };
+
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setEmail(newEmail);
     
-    if (!isValidEmail(newEmail)) {
+    if (errors.email) {
+      setErrors(prev => ({
+        ...prev,
+        email: undefined
+      }));
+    }
+    
+    const isValidEmailInput = isValidEmail(newEmail);
+    if (!isValidEmailInput) {
       setIsNewUser(null);
       return;
     }
@@ -178,25 +195,35 @@ export default function LoginPage() {
     if (isNewUser !== null) {
       gsap.fromTo(
         "#password-container",
-        { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, duration: 0.5 }
-      );
-
-      if (isNewUser) {
-        gsap.fromTo(
-          ".new-user-field",
-          { 
-            opacity: 0,
-            y: 20,
-          },
-          { 
-            opacity: 1,
-            y: 0,
-            duration: 0.5,
-            stagger: 0.1,
+        { 
+          opacity: 0,
+          y: 20,
+          display: 'none'
+        },
+        { 
+          opacity: 1,
+          y: 0,
+          display: 'block',
+          duration: 0.5,
+          onComplete: () => {
+            if (isNewUser) {
+              gsap.fromTo(
+                ".new-user-field",
+                { 
+                  opacity: 0,
+                  y: 20,
+                },
+                { 
+                  opacity: 1,
+                  y: 0,
+                  duration: 0.5,
+                  stagger: 0.1,
+                }
+              );
+            }
           }
-        );
-      }
+        }
+      );
     }
   }, [isNewUser]);
 
@@ -246,6 +273,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={handleEmailChange}
+                  onBlur={handleEmailBlur}
                   className={errors.email ? "border-red-500" : ""}
                 />
                 {isCheckingEmail && (
@@ -259,49 +287,51 @@ export default function LoginPage() {
               )}
             </div>
 
-            <div id="password-container" className="space-y-2" style={{ opacity: 0 }}>
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={handlePasswordChange}
-                onFocus={() => isNewUser && setShowPasswordRequirements(true)}
-                className={errors.password ? "border-red-500" : ""}
-                disabled={isCheckingEmail || isNewUser === null}
-              />
-              {isNewUser && (showPasswordRequirements || errors.password) && (
-                <div className="text-sm space-y-2 new-user-field">
-                  <p className="font-medium text-muted-foreground">Password Requirements:</p>
-                  <ul className="space-y-1">
-                    <li className={`flex items-center ${passwordValidation.hasMinLength ? 'text-green-500' : 'text-red-500'}`}>
-                      <span className="mr-2">{passwordValidation.hasMinLength ? '✓' : '•'}</span>
-                      At least 8 characters long
-                    </li>
-                    <li className={`flex items-center ${passwordValidation.hasUpperCase ? 'text-green-500' : 'text-red-500'}`}>
-                      <span className="mr-2">{passwordValidation.hasUpperCase ? '✓' : '•'}</span>
-                      Contains at least one uppercase letter
-                    </li>
-                    <li className={`flex items-center ${passwordValidation.hasLowerCase ? 'text-green-500' : 'text-red-500'}`}>
-                      <span className="mr-2">{passwordValidation.hasLowerCase ? '✓' : '•'}</span>
-                      Contains at least one lowercase letter
-                    </li>
-                    <li className={`flex items-center ${passwordValidation.hasNumber ? 'text-green-500' : 'text-red-500'}`}>
-                      <span className="mr-2">{passwordValidation.hasNumber ? '✓' : '•'}</span>
-                      Contains at least one number
-                    </li>
-                    <li className={`flex items-center ${passwordValidation.hasSpecialChar ? 'text-green-500' : 'text-red-500'}`}>
-                      <span className="mr-2">{passwordValidation.hasSpecialChar ? '✓' : '•'}</span>
-                      Contains at least one special character
-                    </li>
-                  </ul>
-                </div>
-              )}
-              {errors.password && (
-                <p className="text-sm text-red-500">{errors.password}</p>
-              )}
-            </div>
+            {isNewUser !== null && (
+              <div id="password-container" className="space-y-2 opacity-0">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={handlePasswordChange}
+                  onFocus={() => isNewUser && setShowPasswordRequirements(true)}
+                  className={errors.password ? "border-red-500" : ""}
+                  disabled={isCheckingEmail}
+                />
+                {isNewUser && (showPasswordRequirements || errors.password) && (
+                  <div className="text-sm space-y-2 new-user-field">
+                    <p className="font-medium text-muted-foreground">Password Requirements:</p>
+                    <ul className="space-y-1">
+                      <li className={`flex items-center ${passwordValidation.hasMinLength ? 'text-green-500' : 'text-red-500'}`}>
+                        <span className="mr-2">{passwordValidation.hasMinLength ? '✓' : '•'}</span>
+                        At least 8 characters long
+                      </li>
+                      <li className={`flex items-center ${passwordValidation.hasUpperCase ? 'text-green-500' : 'text-red-500'}`}>
+                        <span className="mr-2">{passwordValidation.hasUpperCase ? '✓' : '•'}</span>
+                        Contains at least one uppercase letter
+                      </li>
+                      <li className={`flex items-center ${passwordValidation.hasLowerCase ? 'text-green-500' : 'text-red-500'}`}>
+                        <span className="mr-2">{passwordValidation.hasLowerCase ? '✓' : '•'}</span>
+                        Contains at least one lowercase letter
+                      </li>
+                      <li className={`flex items-center ${passwordValidation.hasNumber ? 'text-green-500' : 'text-red-500'}`}>
+                        <span className="mr-2">{passwordValidation.hasNumber ? '✓' : '•'}</span>
+                        Contains at least one number
+                      </li>
+                      <li className={`flex items-center ${passwordValidation.hasSpecialChar ? 'text-green-500' : 'text-red-500'}`}>
+                        <span className="mr-2">{passwordValidation.hasSpecialChar ? '✓' : '•'}</span>
+                        Contains at least one special character
+                      </li>
+                    </ul>
+                  </div>
+                )}
+                {errors.password && (
+                  <p className="text-sm text-red-500">{errors.password}</p>
+                )}
+              </div>
+            )}
 
             {isNewUser && (
               <>
