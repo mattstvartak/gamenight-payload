@@ -1,4 +1,8 @@
 import type { CollectionConfig } from "payload";
+import { checkRole } from "./access/checkRole";
+import { admins } from "./access/admins";
+import { adminsAndUser } from "./access/adminsAndUser";
+import { anyone } from "./access/anyone";
 
 export const Mechanics: CollectionConfig = {
   slug: "mechanics",
@@ -7,18 +11,13 @@ export const Mechanics: CollectionConfig = {
     group: "Content",
   },
   access: {
-    // Only admins can access admin panel and manage mechanics
+    read: adminsAndUser,
+    create: anyone,
+    update: adminsAndUser,
+    delete: admins,
     admin: ({ req: { user } }) => {
-      return user?.role === "admin";
-    },
-    create: ({ req: { user } }) => {
-      return user?.role === "admin";
-    },
-    delete: ({ req: { user } }) => {
-      return user?.role === "admin";
-    },
-    update: ({ req: { user } }) => {
-      return user?.role === "admin";
+      if (!user) return false;
+      return checkRole(['admin'], user);
     },
   },
   fields: [
