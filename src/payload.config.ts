@@ -20,7 +20,7 @@ import { Mechanics } from "./collections/Mechanics";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default buildConfig({
-  serverURL: "http://localhost:3000",
+  serverURL: process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000",
   admin: {
     user: Users.slug,
     meta: {
