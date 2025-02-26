@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 interface Library {
   id: string;
@@ -36,36 +37,123 @@ interface Library {
 
 interface AddToLibraryDropdownProps {
   libraries: { library: Library }[];
-  onAddToLibraries: (libraryIds: string[]) => Promise<void>;
-  onCreateLibrary: (name: string) => Promise<void>;
-  disabled?: boolean;
-  gameId?: string; // BGG ID of the game
+  gameId?: string;
 }
 
 export function AddToLibraryDropdown({
-  libraries,
-  onAddToLibraries,
-  onCreateLibrary,
-  disabled = false,
+  libraries: initialLibraries,
   gameId,
 }: AddToLibraryDropdownProps) {
+  const [libraries, setLibraries] = React.useState(initialLibraries);
   const [loadingLibraries, setLoadingLibraries] = React.useState<Set<string>>(
     new Set()
   );
   const [newLibraryName, setNewLibraryName] = React.useState("");
   const [isCreatingLibrary, setIsCreatingLibrary] = React.useState(false);
   const [open, setOpen] = React.useState(false);
+  const [hoveredLibrary, setHoveredLibrary] = React.useState<string | null>(
+    null
+  );
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+
+  // Update local libraries when prop changes
+  React.useEffect(() => {
+    setLibraries(initialLibraries);
+  }, [initialLibraries]);
 
   const isGameInLibrary = (library: Library) => {
-    return library.games?.some((g) => g.game.bggId === gameId);
+    if (!library?.games?.length) return false;
+    return library.games.some((g) => g.game.bggId === gameId);
   };
 
-  const handleLibrarySelect = async (libraryId: string) => {
+  const handleLibrarySelect = async (
+    libraryId: string,
+    isRemoving: boolean
+  ) => {
     setLoadingLibraries((prev) => new Set([...prev, libraryId]));
     try {
-      await onAddToLibraries([libraryId]);
+      if (isRemoving) {
+        const response = await fetch("/api/libraries/remove-game", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            libraryId,
+            gameId,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to remove game from library");
+        }
+
+        // Update local state to remove the game
+        setLibraries((prevLibraries) =>
+          prevLibraries.map((lib) => {
+            if (!lib?.library) return lib;
+            if (lib.library.id === libraryId) {
+              return {
+                ...lib,
+                library: {
+                  ...lib.library,
+                  games:
+                    lib.library.games?.filter((g) => g.game.bggId !== gameId) ||
+                    [],
+                },
+              };
+            }
+            return lib;
+          })
+        );
+      } else {
+        const response = await fetch("/api/libraries/add-game", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            libraryId,
+            gameId,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to add game to library");
+        }
+
+        // Update local state to add the game
+        setLibraries((prevLibraries) =>
+          prevLibraries.map((lib) => {
+            if (!lib?.library) return lib;
+            if (lib.library.id === libraryId) {
+              return {
+                ...lib,
+                library: {
+                  ...lib.library,
+                  games: [
+                    ...(lib.library.games || []),
+                    {
+                      game: {
+                        id: 0,
+                        bggId: gameId,
+                      },
+                    },
+                  ],
+                },
+              };
+            }
+            return lib;
+          })
+        );
+      }
     } catch (err) {
-      console.error("Failed to add game to library:", err);
+      console.error(
+        `Failed to ${isRemoving ? "remove" : "add"} game ${
+          isRemoving ? "from" : "to"
+        } library:`,
+        err
+      );
     } finally {
       setLoadingLibraries((prev) => {
         const next = new Set(prev);
@@ -80,9 +168,39 @@ export function AddToLibraryDropdown({
 
     setIsCreatingLibrary(true);
     try {
-      await onCreateLibrary(newLibraryName);
+      // Create the library
+      const response = await fetch("/api/libraries/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: newLibraryName }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create library");
+      }
+
+      const newLibrary = await response.json();
+
+      // Update local state with the new library
+      const updatedLibraries = [
+        ...libraries,
+        {
+          library: {
+            ...newLibrary,
+            games: [],
+          },
+        },
+      ];
+      setLibraries(updatedLibraries);
+
+      // Close the dialog and reset form
       setNewLibraryName("");
-      setOpen(false); // Close the dropdown after creating a library
+      setDialogOpen(false);
+
+      // After library is created and state is updated, add the game
+      await handleLibrarySelect(newLibrary.id, false);
     } catch (err) {
       console.error("Failed to create library:", err);
     } finally {
@@ -93,10 +211,10 @@ export function AddToLibraryDropdown({
   const isAddingToAnyLibrary = loadingLibraries.size > 0;
 
   return (
-    <Dialog>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" disabled={disabled || isAddingToAnyLibrary}>
+          <Button variant="outline" disabled={isAddingToAnyLibrary}>
             {isAddingToAnyLibrary ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -108,30 +226,50 @@ export function AddToLibraryDropdown({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          {libraries.length > 0 ? (
+          {libraries.filter(({ library }) => library).length > 0 ? (
             <>
-              {libraries.map(({ library }) => (
-                <DropdownMenuCheckboxItem
-                  key={library.id}
-                  checked={isGameInLibrary(library)}
-                  disabled={
-                    loadingLibraries.has(library.id) || isGameInLibrary(library)
-                  }
-                  onSelect={(e) => {
-                    e.preventDefault();
-                  }}
-                  onCheckedChange={() => handleLibrarySelect(library.id)}
-                >
-                  {loadingLibraries.has(library.id) ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    library.name
-                  )}
-                </DropdownMenuCheckboxItem>
-              ))}
+              {libraries.map(({ library }) => {
+                if (!library) return null;
+                const inLibrary = isGameInLibrary(library);
+                const isHovered = hoveredLibrary === library.id;
+                const isLoading = loadingLibraries.has(library.id);
+
+                return (
+                  <DropdownMenuItem
+                    key={library.id}
+                    disabled={isLoading}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleLibrarySelect(library.id, Boolean(inLibrary));
+                    }}
+                    onMouseEnter={() => setHoveredLibrary(library.id)}
+                    onMouseLeave={() => setHoveredLibrary(null)}
+                    className={cn(
+                      "flex items-center gap-2",
+                      inLibrary && isHovered && "text-destructive"
+                    )}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {inLibrary ? "Removing..." : "Adding..."}
+                      </>
+                    ) : (
+                      <>
+                        {inLibrary ? (
+                          isHovered ? (
+                            <X className="h-4 w-4 text-destructive" />
+                          ) : (
+                            <Check className="h-4 w-4" />
+                          )
+                        ) : null}
+                        {library.name}
+                        {inLibrary && isHovered && " (Remove)"}
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
               <DropdownMenuSeparator />
             </>
           ) : (
@@ -141,6 +279,7 @@ export function AddToLibraryDropdown({
             <DropdownMenuItem
               onSelect={(e) => {
                 e.preventDefault();
+                setDialogOpen(true);
               }}
             >
               <Plus className="mr-2 h-4 w-4" />

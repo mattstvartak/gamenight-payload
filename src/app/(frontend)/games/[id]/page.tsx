@@ -301,48 +301,6 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
                 <AddToLibraryDropdown
                   libraries={user?.libraries || []}
                   gameId={game.bggId}
-                  onAddToLibraries={async (libraryIds) => {
-                    await Promise.all(
-                      libraryIds.map((libraryId) =>
-                        fetch("/api/libraries/add-game", {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify({
-                            libraryId,
-                            gameId: game.bggId,
-                          }),
-                        })
-                      )
-                    );
-                  }}
-                  onCreateLibrary={async (name) => {
-                    const response = await fetch("/api/libraries/create", {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({ name }),
-                    });
-
-                    if (!response.ok) {
-                      throw new Error("Failed to create library");
-                    }
-
-                    const newLibrary = await response.json();
-                    setUser((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            libraries: [
-                              ...(prev.libraries || []),
-                              { library: newLibrary },
-                            ],
-                          }
-                        : null
-                    );
-                  }}
                 />
               </AuthGuard>
             </div>
