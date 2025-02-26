@@ -6,14 +6,7 @@ export const Media: CollectionConfig = {
     read: () => true,
   },
   upload: {
-    staticDir: "media",
     mimeTypes: ["image/*"],
-    formatOptions: {
-      format: "webp",
-      options: {
-        quality: 85,
-      },
-    },
     imageSizes: [
       {
         name: "thumbnail",
@@ -58,27 +51,6 @@ export const Media: CollectionConfig = {
     {
       name: "filesize",
       type: "number",
-      admin: {
-        readOnly: true,
-      },
-    },
-    {
-      name: "width",
-      type: "number",
-      admin: {
-        readOnly: true,
-      },
-    },
-    {
-      name: "height",
-      type: "number",
-      admin: {
-        readOnly: true,
-      },
-    },
-    {
-      name: "sizes",
-      type: "json",
       admin: {
         readOnly: true,
       },

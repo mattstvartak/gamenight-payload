@@ -122,10 +122,6 @@ export async function GET(req: Request) {
           id: bggId,
           name: payloadGame.name || "",
           description: payloadGame.description || undefined,
-          image:
-            payloadGame.image && typeof payloadGame.image !== "number"
-              ? payloadGame.image.url
-              : undefined,
           yearPublished: payloadGame.yearPublished?.toString(),
           minPlayers: payloadGame.minPlayers || undefined,
           maxPlayers: payloadGame.maxPlayers || undefined,
@@ -133,6 +129,11 @@ export async function GET(req: Request) {
           maxPlaytime: payloadGame.maxPlaytime || undefined,
           minAge: payloadGame.minAge || undefined,
           weight: payloadGame.complexity || undefined,
+          images: payloadGame.images
+            ?.map((img) => ({
+              image: typeof img.image === "number" ? null : img.image,
+            }))
+            .filter((img) => img.image !== null),
           categories:
             payloadGame.categories
               ?.map((c) => {
@@ -179,6 +180,35 @@ export async function GET(req: Request) {
       game: {
         id: bggId,
         ...bggGame,
+        // Convert BGG image data to match Payload structure
+        images: [
+          ...(bggGame.image
+            ? [
+                {
+                  image: {
+                    url: bggGame.image,
+                    alt: `${bggGame.name} main image`,
+                    filename: bggGame.image.split("/").pop() || "image.jpg",
+                  },
+                },
+              ]
+            : []),
+          ...(bggGame.thumbnail
+            ? [
+                {
+                  image: {
+                    url: bggGame.thumbnail,
+                    alt: `${bggGame.name} thumbnail`,
+                    filename:
+                      bggGame.thumbnail.split("/").pop() || "thumbnail.jpg",
+                  },
+                },
+              ]
+            : []),
+        ],
+        // Remove the old image fields
+        image: undefined,
+        thumbnail: undefined,
       },
     });
   } catch (error) {

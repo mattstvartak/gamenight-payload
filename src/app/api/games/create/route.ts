@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPayload } from "payload";
 import config from "@/payload.config";
-import { put } from "@vercel/blob";
 
 interface BGGGameDetails {
   name: string;
@@ -19,38 +18,16 @@ interface BGGGameDetails {
   mechanics: string[];
 }
 
-async function uploadImageToBlob(
-  imageUrl: string,
-  gameName: string,
-  isMain: boolean = false
-) {
+// Helper function to extract filename from URL
+function getFilenameFromUrl(url: string): string {
   try {
-    // Fetch the image
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) throw new Error("Failed to fetch image");
-
-    // Get the image data as a Buffer
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Get content type and extension
-    const contentType =
-      imageResponse.headers.get("content-type") || "image/jpeg";
-    const extension = imageUrl.split(".").pop() || "jpg";
-
-    // Create a File object that Payload can process
-    const file = {
-      data: buffer,
-      size: buffer.length,
-      filename: isMain ? `main.${extension}` : `${Date.now()}.${extension}`,
-      mimetype: contentType,
-      name: isMain ? `main.${extension}` : `${Date.now()}.${extension}`,
-    };
-
-    return file;
-  } catch (error) {
-    console.error("Error preparing image:", error);
-    return null;
+    const urlPath = new URL(url).pathname;
+    const filename = urlPath.split("/").pop();
+    return filename || "image.jpg";
+  } catch (e) {
+    // If URL parsing fails, extract filename from the last part of the URL
+    const parts = url.split("/");
+    return parts[parts.length - 1] || "image.jpg";
   }
 }
 
@@ -97,47 +74,38 @@ export async function POST(req: Request) {
     // Create media entries for all game images
     const imageIds = [];
 
-    // Handle main image first
+    // Handle main image
     if (gameDetails.image) {
-      const mainImageFile = await uploadImageToBlob(
-        gameDetails.image,
-        gameDetails.name,
-        true
-      );
-      if (mainImageFile) {
-        const media = await payload.create({
-          collection: "media",
-          data: {
-            alt: `${gameDetails.name} main image`,
-          },
-          file: mainImageFile,
-        });
-        imageIds.push({ image: media.id });
-      }
+      const filename = getFilenameFromUrl(gameDetails.image);
+      const mainMedia = await payload.create({
+        collection: "media",
+        data: {
+          alt: `${gameDetails.name} main image`,
+          url: gameDetails.image,
+          filename,
+        },
+      });
+      imageIds.push({ image: mainMedia.id });
     }
 
     // Handle additional images
     if (gameDetails.images?.length) {
       const additionalImagePromises = gameDetails.images.map(
         async (imageUrl) => {
-          const imageFile = await uploadImageToBlob(imageUrl, gameDetails.name);
-          if (imageFile) {
-            const media = await payload.create({
-              collection: "media",
-              data: {
-                alt: `${gameDetails.name} additional image`,
-              },
-              file: imageFile,
-            });
-            return { image: media.id };
-          }
-          return null;
+          const filename = getFilenameFromUrl(imageUrl);
+          const media = await payload.create({
+            collection: "media",
+            data: {
+              alt: `${gameDetails.name} additional image`,
+              url: imageUrl,
+              filename,
+            },
+          });
+          return { image: media.id };
         }
       );
 
-      const additionalImageIds = (
-        await Promise.all(additionalImagePromises)
-      ).filter((id): id is { image: number } => id !== null);
+      const additionalImageIds = await Promise.all(additionalImagePromises);
       imageIds.push(...additionalImageIds);
     }
 

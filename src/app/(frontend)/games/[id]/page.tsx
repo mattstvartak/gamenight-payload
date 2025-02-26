@@ -4,12 +4,18 @@ import { useEffect, useState, use } from "react";
 import { Loader2, Users, Clock, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+interface MediaImage {
+  id: number;
+  url: string;
+  filename: string;
+  alt: string;
+}
+
 interface GameDetails {
   id: string;
   name: string;
   yearPublished?: string;
-  thumbnail?: string;
-  image?: string;
+  images?: { image: MediaImage }[];
   description?: string;
   minPlayers?: number;
   maxPlayers?: number;
@@ -104,15 +110,20 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
     );
   }
 
+  // Get the main image (first image) from the images array
+  const mainImage = game.images?.[0]?.image;
+
+  console.log(":game", game);
+
   return (
     <div className="container max-w-4xl mx-auto py-8 space-y-6">
       <div className="grid md:grid-cols-2 gap-6">
         {/* Image Section */}
         <div className="md:col-span-1">
-          {game.image ? (
+          {mainImage ? (
             <img
-              src={game.image}
-              alt={game.name}
+              src={mainImage.url}
+              alt={mainImage.alt}
               className="w-full rounded-lg shadow-lg"
             />
           ) : (
@@ -163,6 +174,27 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Additional Images Gallery */}
+      {game.images && game.images.length > 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Gallery</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {game.images.slice(1).map((imageObj) => (
+                <img
+                  key={imageObj.image.id}
+                  src={imageObj.image.url}
+                  alt={imageObj.image.alt}
+                  className="w-full h-48 object-cover rounded-lg shadow-md hover:shadow-lg transition-shadow"
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Description Card */}
       {game.description && (
