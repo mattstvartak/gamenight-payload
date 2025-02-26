@@ -45,6 +45,9 @@ export default buildConfig({
   db: postgresAdapter({
     pool: {
       connectionString: process.env.POSTGRES_URL || "",
+      ssl: {
+        ca: process.env.SUPABASE_CA_CERT,
+      }
     },
   }),
   sharp,
