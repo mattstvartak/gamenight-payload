@@ -55,5 +55,19 @@ export const Media: CollectionConfig = {
         readOnly: true,
       },
     },
+    {
+      name: "gameId",
+      type: "text",
+      admin: {
+        readOnly: true,
+      },
+    },
+    {
+      name: "gameName",
+      type: "text",
+      admin: {
+        readOnly: true,
+      },
+    },
   ],
 };

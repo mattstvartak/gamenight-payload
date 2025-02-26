@@ -25,8 +25,6 @@ export default buildConfig({
     user: Users.slug,
     meta: {
       titleSuffix: "- GameNight",
-      favicon: "/assets/favicon.ico",
-      ogImage: "/assets/og-image.jpg",
     },
   },
   collections: [
@@ -55,7 +53,18 @@ export default buildConfig({
     vercelBlobStorage({
       enabled: true,
       collections: {
-        media: true,
+        media: {
+          prefix: "games",
+          generateFileURL: (args) => {
+            const { filename, prefix = "games" } = args;
+            // Extract game name from the filename path if it exists
+            const pathParts = filename.split("/");
+            if (pathParts.length > 2 && pathParts[1] === "images") {
+              return `${process.env.NEXT_PUBLIC_BLOB_URL_PREFIX}/${prefix}${filename}`;
+            }
+            return `${process.env.NEXT_PUBLIC_BLOB_URL_PREFIX}/${prefix}${filename}`;
+          },
+        },
       },
       token: process.env.BLOB_READ_WRITE_TOKEN,
     }),
@@ -66,22 +75,6 @@ export default buildConfig({
   upload: {
     limits: {
       fileSize: 5000000, // 5MB
-    },
-    image: {
-      imgix: {
-        transformFormat: true,
-      },
-      formatOptions: {
-        format: "webp",
-        options: {
-          quality: 85,
-        },
-      },
-      resizeOptions: {
-        width: 1920,
-        height: 1080,
-        fit: sharp.fit.inside,
-      },
     },
   },
 });

@@ -234,6 +234,9 @@ export interface Game {
 export interface Media {
   id: number;
   alt: string;
+  gameId?: string | null;
+  gameName?: string | null;
+  prefix?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -484,6 +487,9 @@ export interface UsersSelect<T extends boolean = true> {
  */
 export interface MediaSelect<T extends boolean = true> {
   alt?: T;
+  gameId?: T;
+  gameName?: T;
+  prefix?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPayload } from "payload";
+import type { Media } from "@/payload-types";
 import config from "@/payload.config";
 
 interface BGGGameDetails {
@@ -29,6 +30,12 @@ function getFilenameFromUrl(url: string): string {
     const parts = url.split("/");
     return parts[parts.length - 1] || "image.jpg";
   }
+}
+
+// Helper function to create storage path
+function createStoragePath(gameName: string, filename: string): string {
+  const gamePath = gameName.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase();
+  return `games/${gamePath}/images/${filename}`;
 }
 
 export async function POST(req: Request) {
@@ -77,12 +84,18 @@ export async function POST(req: Request) {
     // Handle main image
     if (gameDetails.image) {
       const filename = getFilenameFromUrl(gameDetails.image);
+      const storagePath = createStoragePath(gameDetails.name, filename);
       const mainMedia = await payload.create({
         collection: "media",
         data: {
           alt: `${gameDetails.name} main image`,
           url: gameDetails.image,
-          filename,
+          filename: filename,
+          prefix: storagePath.replace(filename, ""), // Store the path prefix separately
+          gameId: bggId,
+          gameName: gameDetails.name
+            .replace(/[^a-zA-Z0-9-_]/g, "-")
+            .toLowerCase(),
         },
       });
       imageIds.push({ image: mainMedia.id });
@@ -93,12 +106,18 @@ export async function POST(req: Request) {
       const additionalImagePromises = gameDetails.images.map(
         async (imageUrl) => {
           const filename = getFilenameFromUrl(imageUrl);
+          const storagePath = createStoragePath(gameDetails.name, filename);
           const media = await payload.create({
             collection: "media",
             data: {
               alt: `${gameDetails.name} additional image`,
               url: imageUrl,
-              filename,
+              filename: filename,
+              prefix: storagePath.replace(filename, ""), // Store the path prefix separately
+              gameId: bggId,
+              gameName: gameDetails.name
+                .replace(/[^a-zA-Z0-9-_]/g, "-")
+                .toLowerCase(),
             },
           });
           return { image: media.id };

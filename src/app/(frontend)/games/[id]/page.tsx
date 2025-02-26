@@ -3,19 +3,37 @@
 import { useEffect, useState, use } from "react";
 import { Loader2, Users, Clock, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 
 interface MediaImage {
   id: number;
   url: string;
   filename: string;
   alt: string;
+  sizes?: {
+    thumbnail?: {
+      url: string;
+      width: number;
+      height: number;
+    };
+    card?: {
+      url: string;
+      width: number;
+      height: number;
+    };
+  };
 }
 
 interface GameDetails {
   id: string;
   name: string;
   yearPublished?: string;
-  images?: { image: MediaImage }[];
   description?: string;
   minPlayers?: number;
   maxPlayers?: number;
@@ -28,6 +46,7 @@ interface GameDetails {
   mechanics?: string[];
   designers?: string[];
   publishers?: string[];
+  images?: { image: MediaImage }[];
 }
 
 interface PageParams {
@@ -110,22 +129,42 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
     );
   }
 
-  // Get the main image (first image) from the images array
-  const mainImage = game.images?.[0]?.image;
-
-  console.log(":game", game);
+  // Get all images from the images array
+  const allImages = game.images || [];
 
   return (
     <div className="container max-w-4xl mx-auto py-8 space-y-6">
       <div className="grid md:grid-cols-2 gap-6">
         {/* Image Section */}
         <div className="md:col-span-1">
-          {mainImage ? (
-            <img
-              src={mainImage.url}
-              alt={mainImage.alt}
-              className="w-full rounded-lg shadow-lg"
-            />
+          {allImages.length > 0 ? (
+            allImages.length === 1 ? (
+              <div className="relative aspect-square">
+                <img
+                  src={allImages[0].image.url}
+                  alt={allImages[0].image.alt}
+                  className="w-full h-full object-cover rounded-lg shadow-lg"
+                />
+              </div>
+            ) : (
+              <Carousel className="w-full">
+                <CarouselContent>
+                  {allImages.map((imageObj) => (
+                    <CarouselItem key={imageObj.image.id}>
+                      <div className="relative aspect-square">
+                        <img
+                          src={imageObj.image.url}
+                          alt={imageObj.image.alt}
+                          className="w-full h-full object-cover rounded-lg shadow-lg"
+                        />
+                      </div>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                <CarouselPrevious className="left-2" />
+                <CarouselNext className="right-2" />
+              </Carousel>
+            )
           ) : (
             <div className="w-full aspect-square bg-muted rounded-lg flex items-center justify-center">
               <span className="text-muted-foreground">No image available</span>
@@ -174,27 +213,6 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           </CardContent>
         </Card>
       </div>
-
-      {/* Additional Images Gallery */}
-      {game.images && game.images.length > 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Gallery</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {game.images.slice(1).map((imageObj) => (
-                <img
-                  key={imageObj.image.id}
-                  src={imageObj.image.url}
-                  alt={imageObj.image.alt}
-                  className="w-full h-48 object-cover rounded-lg shadow-md hover:shadow-lg transition-shadow"
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Description Card */}
       {game.description && (
