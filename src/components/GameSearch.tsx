@@ -148,14 +148,17 @@ export function GameSearch() {
               Number(minPlayTimeElement?.getAttribute("value")) || null,
             maxPlaytime:
               Number(maxPlayTimeElement?.getAttribute("value")) || null,
-            image: thumbnailElement?.textContent
-              ? ({
-                  id: 0,
-                  alt: `${item.name} thumbnail`,
-                  url: thumbnailElement.textContent,
-                  updatedAt: new Date().toISOString(),
-                  createdAt: new Date().toISOString(),
-                } as Media)
+            images: thumbnailElement?.textContent
+              ? [{
+                  image: {
+                    id: 0,
+                    alt: `${item.name} thumbnail`,
+                    url: thumbnailElement.textContent,
+                    updatedAt: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
+                  } as Media,
+                  id: '0'
+                }]
               : null,
             type: "boardgame",
             isLoaded: true,
@@ -280,7 +283,7 @@ export function GameSearch() {
         >
           <div className="flex-shrink-0 h-16 w-16 mr-4 relative">
             {game.isLoaded ? (
-              <GameThumbnail image={game.image} name={game.name || ""} />
+              <GameThumbnail image={game.images?.[0]?.image} name={game.name || ""} />
             ) : (
               <div className="h-full w-full bg-muted rounded-sm flex items-center justify-center">
                 <Loader2 className="h-4 w-4 animate-spin" />
