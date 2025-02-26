@@ -10,6 +10,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface MediaImage {
   id: number;
@@ -81,6 +82,33 @@ async function fetchWithRetry(
   throw lastError;
 }
 
+const loadingMessages = [
+  "Rolling the dice...",
+  "Shuffling the cards...",
+  "Setting up the board...",
+  "Dealing the hands...",
+  "Reading the rulebook...",
+  "Organizing the meeples...",
+  "Calculating victory points...",
+  "Finding the start player...",
+  "Sorting the resource tokens...",
+  "Checking for missing pieces...",
+];
+
+function useRotatingMessage(messages: string[], interval: number = 2000) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentIndex((current) => (current + 1) % messages.length);
+    }, interval);
+
+    return () => clearInterval(timer);
+  }, [interval, messages.length]);
+
+  return messages[currentIndex];
+}
+
 export default function GamePage({ params }: { params: Promise<PageParams> }) {
   const unwrappedParams = use(params);
   const [game, setGame] = useState<GameDetails | null>(null);
@@ -113,8 +141,41 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="container max-w-4xl mx-auto py-8 space-y-6">
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Image Section Skeleton */}
+          <div className="md:col-span-1">
+            <Skeleton className="w-full aspect-square rounded-lg" />
+          </div>
+
+          {/* Details Card Skeleton */}
+          <Card className="md:col-span-1">
+            <CardHeader>
+              <Skeleton className="h-8 w-3/4" />
+              <Skeleton className="h-4 w-1/4 mt-2" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Skeleton className="h-5 w-1/2" />
+                <Skeleton className="h-5 w-1/3" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Description Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-8 w-32" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
