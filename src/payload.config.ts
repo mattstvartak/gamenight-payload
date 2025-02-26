@@ -45,12 +45,10 @@ export default buildConfig({
   },
   db: postgresAdapter({
     pool: {
-      connectionString: process.env.POSTGRES_URL || "",
-      ssl: {
-        ca: process.env.SUPABASE_CA_CERT?.includes('-----BEGIN CERTIFICATE-----')
-        ? process.env.SUPABASE_CA_CERT
-        : readFileSync(process.env.SUPABASE_CA_CERT!),
-      }
+      connectionString: process.env.SUPABASE_URL || "",
+      // ssl: {
+      //   rejectUnauthorized: false
+      // }
     },
   }),
   sharp,
