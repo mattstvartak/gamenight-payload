@@ -57,11 +57,6 @@ export default buildConfig({
           prefix: "games",
           generateFileURL: (args) => {
             const { filename, prefix = "games" } = args;
-            // Extract game name from the filename path if it exists
-            const pathParts = filename.split("/");
-            if (pathParts.length > 2 && pathParts[1] === "images") {
-              return `${process.env.NEXT_PUBLIC_BLOB_URL_PREFIX}/${prefix}${filename}`;
-            }
             return `${process.env.NEXT_PUBLIC_BLOB_URL_PREFIX}/${prefix}${filename}`;
           },
         },

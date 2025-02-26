@@ -24,6 +24,7 @@ function getFilenameFromUrl(url: string): string {
   try {
     const urlPath = new URL(url).pathname;
     const filename = urlPath.split("/").pop();
+    console.log("filename", filename);
     return filename || "image.jpg";
   } catch (e) {
     // If URL parsing fails, extract filename from the last part of the URL
@@ -36,6 +37,30 @@ function getFilenameFromUrl(url: string): string {
 function createStoragePath(gameName: string, filename: string): string {
   const gamePath = gameName.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase();
   return `games/${gamePath}/images/${filename}`;
+}
+
+// Helper function to fetch image and convert to File object
+async function fetchImageAsFile(
+  url: string,
+  filename: string
+): Promise<{
+  data: Buffer;
+  mimetype: string;
+  name: string;
+  size: number;
+}> {
+  const response = await fetch(url);
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const mimetype = response.headers.get("content-type") || "image/jpeg";
+  const size = buffer.length;
+
+  return {
+    data: buffer,
+    mimetype,
+    name: filename,
+    size,
+  };
 }
 
 export async function POST(req: Request) {
@@ -83,20 +108,24 @@ export async function POST(req: Request) {
 
     // Handle main image
     if (gameDetails.image) {
+      console.log("gameDetails.image", gameDetails.image);
       const filename = getFilenameFromUrl(gameDetails.image);
       const storagePath = createStoragePath(gameDetails.name, filename);
+
+      // Fetch and convert image to File object
+      const file = await fetchImageAsFile(gameDetails.image, filename);
+
       const mainMedia = await payload.create({
         collection: "media",
         data: {
           alt: `${gameDetails.name} main image`,
-          url: gameDetails.image,
-          filename: filename,
           prefix: storagePath.replace(filename, ""), // Store the path prefix separately
           gameId: bggId,
           gameName: gameDetails.name
             .replace(/[^a-zA-Z0-9-_]/g, "-")
             .toLowerCase(),
         },
+        file,
       });
       imageIds.push({ image: mainMedia.id });
     }
@@ -107,18 +136,21 @@ export async function POST(req: Request) {
         async (imageUrl) => {
           const filename = getFilenameFromUrl(imageUrl);
           const storagePath = createStoragePath(gameDetails.name, filename);
+
+          // Fetch and convert image to File object
+          const file = await fetchImageAsFile(imageUrl, filename);
+
           const media = await payload.create({
             collection: "media",
             data: {
               alt: `${gameDetails.name} additional image`,
-              url: imageUrl,
-              filename: filename,
               prefix: storagePath.replace(filename, ""), // Store the path prefix separately
               gameId: bggId,
               gameName: gameDetails.name
                 .replace(/[^a-zA-Z0-9-_]/g, "-")
                 .toLowerCase(),
             },
+            file,
           });
           return { image: media.id };
         }
