@@ -29,6 +29,10 @@ export const Games: CollectionConfig = {
       options: ["boardgame", "videogame", "cardgame", "tabletop","other"],
     },
     {
+      name: "yearPublished",
+      type: "number",
+    },
+    {
       name: "minPlayers",
       type: "number",
     },

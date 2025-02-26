@@ -1,126 +1,340 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from "react";
+import { List, AutoSizer, InfiniteLoader } from "react-virtualized";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Loader2 } from "lucide-react";
+import { Loader2, Users, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { Game, Media } from "../payload-types";
+import { useRouter } from "next/navigation";
 
-interface Game {
+// Helper function to delay execution
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Helper function to retry failed requests
+async function fetchWithRetry(
+  url: string,
+  retries = 3,
+  delayMs = 1000
+): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url);
+
+      // BGG API sometimes returns 202 when the request is accepted but not ready
+      if (response.status === 202) {
+        await delay(delayMs);
+        continue;
+      }
+
+      if (response.ok) {
+        return response;
+      }
+    } catch (error) {
+      if (i === retries - 1) throw error;
+    }
+    await delay(delayMs);
+  }
+  throw new Error(`Failed to fetch after ${retries} retries`);
+}
+
+interface SearchGame extends Partial<Game> {
+  isLoaded?: boolean;
+  bggId: string;
+}
+
+interface SearchResult {
   id: string;
+  type: string;
   name: string;
-  yearPublished?: string;
-  thumbnail?: string;
+}
+
+// Helper function to check if value is Media type
+function isMedia(value: number | Media | null): value is Media {
+  return value !== null && typeof value === "object" && "url" in value;
+}
+
+function GameThumbnail({
+  image,
+  name,
+}: {
+  image?: number | Media | null;
+  name: string;
+}) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  if (!image || !isMedia(image)) {
+    return (
+      <div className="h-full w-full bg-muted rounded-sm flex items-center justify-center">
+        <span className="text-muted-foreground text-xs">No image</span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div
+        className={cn(
+          "absolute inset-0 bg-muted rounded-sm flex items-center justify-center",
+          imageLoaded ? "opacity-0" : "opacity-100"
+        )}
+      >
+        <span className="text-muted-foreground text-xs">Loading...</span>
+      </div>
+      <img
+        src={image.url || ""}
+        alt={image.alt}
+        loading="lazy"
+        onLoad={() => setImageLoaded(true)}
+        className={cn(
+          "h-full w-full object-cover rounded-sm transition-opacity duration-200",
+          imageLoaded ? "opacity-100" : "opacity-0"
+        )}
+      />
+    </>
+  );
 }
 
 export function GameSearch() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [games, setGames] = useState<Game[]>([]);
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [games, setGames] = useState<SearchGame[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const currentQuery = useRef(searchQuery);
-  const searchTimeout = useRef<NodeJS.Timeout>();
+  const searchTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
+  const searchResults = useRef<SearchResult[]>([]);
+  const [hasNextPage, setHasNextPage] = useState(true);
+  const BATCH_SIZE = 10;
 
-  const ITEMS_PER_PAGE = 5;
+  const loadGameDetails = useCallback(
+    async (startIndex: number, stopIndex: number) => {
+      const itemsToLoad = searchResults.current.slice(startIndex, stopIndex);
+      if (itemsToLoad.length === 0) return;
 
-  const searchGames = useCallback(async (query: string, pageNum: number, append: boolean = false) => {
-    if (!query) {
-      setGames([]);
-      return;
-    }
+      const newGames: SearchGame[] = [];
 
-    setIsLoading(true);
-    try {
-      // BGG API requires XML parsing
-      const response = await fetch(`https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}&type=boardgame`);
-      const text = await response.text();
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(text, "text/xml");
-      
-      const items = xmlDoc.getElementsByTagName('item');
-      const startIndex = (pageNum - 1) * ITEMS_PER_PAGE;
-      const endIndex = startIndex + ITEMS_PER_PAGE;
-      const parsedGames: Game[] = [];
+      for (const item of itemsToLoad) {
+        try {
+          await delay(250); // Add delay between requests
 
-      // Check if there are more items to load
-      setHasMore(endIndex < items.length);
+          const detailsResponse = await fetchWithRetry(
+            `https://boardgamegeek.com/xmlapi2/thing?id=${item.id}`,
+            3,
+            1000
+          );
 
-      for (let i = startIndex; i < Math.min(endIndex, items.length); i++) {
-        const item = items[i];
-        const id = item.getAttribute('id') || '';
-        
-        // Get detailed game info including thumbnail
-        const detailsResponse = await fetch(`https://boardgamegeek.com/xmlapi2/thing?id=${id}`);
-        const detailsText = await detailsResponse.text();
-        const detailsDoc = parser.parseFromString(detailsText, "text/xml");
-        
-        const nameElement = detailsDoc.querySelector('name[type="primary"]');
-        const yearPublishedElement = detailsDoc.querySelector('yearpublished');
-        const thumbnailElement = detailsDoc.querySelector('thumbnail');
-        
-        const yearPublished = yearPublishedElement?.getAttribute('value') || undefined;
-        const thumbnail = thumbnailElement?.textContent || undefined;
+          const detailsText = await detailsResponse.text();
+          const detailsDoc = new DOMParser().parseFromString(
+            detailsText,
+            "text/xml"
+          );
 
-        if (nameElement) {
-          parsedGames.push({
-            id,
-            name: nameElement.getAttribute('value') || '',
-            yearPublished,
-            thumbnail,
+          const yearPublishedElement =
+            detailsDoc.querySelector("yearpublished");
+          const thumbnailElement = detailsDoc.querySelector("thumbnail");
+          const minPlayersElement = detailsDoc.querySelector("minplayers");
+          const maxPlayersElement = detailsDoc.querySelector("maxplayers");
+          const minPlayTimeElement = detailsDoc.querySelector("minplaytime");
+          const maxPlayTimeElement = detailsDoc.querySelector("maxplaytime");
+
+          newGames.push({
+            bggId: item.id,
+            name: item.name,
+            minPlayers:
+              Number(minPlayersElement?.getAttribute("value")) || null,
+            maxPlayers:
+              Number(maxPlayersElement?.getAttribute("value")) || null,
+            minPlaytime:
+              Number(minPlayTimeElement?.getAttribute("value")) || null,
+            maxPlaytime:
+              Number(maxPlayTimeElement?.getAttribute("value")) || null,
+            image: thumbnailElement?.textContent
+              ? ({
+                  id: 0,
+                  alt: `${item.name} thumbnail`,
+                  url: thumbnailElement.textContent,
+                  updatedAt: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
+                } as Media)
+              : null,
+            type: "boardgame",
+            isLoaded: true,
           });
+        } catch (error) {
+          console.error(`Error fetching details for game ${item.id}:`, error);
         }
       }
 
-      setGames(prev => append ? [...prev, ...parsedGames] : parsedGames);
-    } catch (error) {
-      console.error('Error searching games:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [setGames, setHasMore, setIsLoading]);
+      setGames((prev) => {
+        const updatedGames = [...prev];
+        newGames.forEach((game) => {
+          const index = startIndex + newGames.indexOf(game);
+          updatedGames[index] = game;
+        });
+        return updatedGames;
+      });
+    },
+    []
+  );
 
-  // Debounced search effect
-  useEffect(() => {
-    // Clear any existing timeout
+  const searchGames = useCallback(
+    async (query: string) => {
+      if (!query) {
+        setGames([]);
+        searchResults.current = [];
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        const response = await fetchWithRetry(
+          `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}`,
+          3,
+          1000
+        );
+        const text = await response.text();
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(text, "text/xml");
+        const items = xmlDoc.getElementsByTagName("item");
+
+        // Store all search results with names
+        searchResults.current = Array.from(items)
+          .map((item) => {
+            const id = item.getAttribute("id");
+            const type = item.getAttribute("type");
+            const nameElement = item.querySelector("name");
+            const name = nameElement?.getAttribute("value") || "";
+            return id && type && name ? { id, type, name } : null;
+          })
+          .filter((item): item is SearchResult => item !== null);
+
+        // Initialize games array with names from search results
+        const initialGames: SearchGame[] = searchResults.current.map(
+          (item) => ({
+            bggId: item.id,
+            name: item.name,
+            isLoaded: false,
+          })
+        );
+
+        setGames(initialGames);
+        setHasNextPage(true);
+
+        // Load first batch of details
+        await loadGameDetails(
+          0,
+          Math.min(BATCH_SIZE, searchResults.current.length)
+        );
+      } catch (error) {
+        console.error("Error searching games:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [loadGameDetails]
+  );
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
 
-    if (searchQuery) {
+    if (value) {
       searchTimeout.current = setTimeout(() => {
-        currentQuery.current = searchQuery;
-        setPage(1);
-        setHasMore(true);
-        searchGames(searchQuery, 1, false);
+        searchGames(value);
       }, 500);
     } else {
       setGames([]);
     }
-
-    // Cleanup function
-    return () => {
-      if (searchTimeout.current) {
-        clearTimeout(searchTimeout.current);
-      }
-    };
-  }, [searchQuery, searchGames, setGames]);
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
   };
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (isLoading || !hasMore) return;
+  const isRowLoaded = ({ index }: { index: number }) => {
+    return Boolean(games[index]?.isLoaded);
+  };
 
-    const target = e.target as HTMLDivElement;
-    const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-    
-    if (scrollBottom < 100) { // Load more when within 100px of bottom
-      setPage(prev => prev + 1);
-      searchGames(currentQuery.current, page + 1, true);
+  const handleGameClick = (bggId: string) => {
+    router.push(`/games/${bggId}`);
+  };
+
+  const rowRenderer = ({
+    key,
+    index,
+    style,
+  }: {
+    key: string;
+    index: number;
+    style: React.CSSProperties;
+  }) => {
+    const game = games[index];
+    if (!game) return null;
+
+    return (
+      <div key={key} style={style}>
+        <div
+          className="flex items-center p-4 hover:bg-accent cursor-pointer"
+          onClick={() => handleGameClick(game.bggId)}
+        >
+          <div className="flex-shrink-0 h-16 w-16 mr-4 relative">
+            {game.isLoaded ? (
+              <GameThumbnail image={game.image} name={game.name || ""} />
+            ) : (
+              <div className="h-full w-full bg-muted rounded-sm flex items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1">
+            <h3 className="font-medium">{game.name}</h3>
+            {game.isLoaded && (
+              <div className="space-y-1">
+                <div className="flex gap-4 text-sm text-muted-foreground">
+                  {(game.minPlayers || game.maxPlayers) && (
+                    <div className="flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+                      <span>
+                        {game.minPlayers === game.maxPlayers
+                          ? `${game.minPlayers}`
+                          : `${game.minPlayers}-${game.maxPlayers}`}
+                      </span>
+                    </div>
+                  )}
+                  {(game.minPlaytime || game.maxPlaytime) && (
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        {game.minPlaytime === game.maxPlaytime
+                          ? `${game.minPlaytime}`
+                          : `${game.minPlaytime}-${game.maxPlaytime}`}
+                        {" min"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        {index < games.length - 1 && <Separator />}
+      </div>
+    );
+  };
+
+  const loadMoreRows = async ({
+    startIndex,
+    stopIndex,
+  }: {
+    startIndex: number;
+    stopIndex: number;
+  }) => {
+    if (startIndex >= searchResults.current.length) {
+      setHasNextPage(false);
+      return;
     }
+    await loadGameDetails(startIndex, stopIndex);
   };
 
   return (
@@ -132,56 +346,41 @@ export function GameSearch() {
         value={searchQuery}
         onChange={handleSearch}
       />
-      
-      {isLoading && (
+
+      {isLoading && games.length === 0 && (
         <div className="absolute right-3 top-3">
           <Loader2 className="h-4 w-4 animate-spin" />
         </div>
       )}
 
       {games.length > 0 && (
-        <div className="absolute w-full mt-2 bg-background border rounded-md shadow-lg z-50">
-          <ScrollArea 
-            className="h-[300px] w-full rounded-md" 
-            onScroll={handleScroll}
-            ref={scrollRef}
-          >
-            {games.map((game, index) => (
-              <div key={game.id}>
-                <div className="flex items-center p-4 hover:bg-accent cursor-pointer">
-                  <div className="flex-shrink-0 h-16 w-16 mr-4">
-                    {game.thumbnail ? (
-                      <img
-                        src={game.thumbnail}
-                        alt={`${game.name} box art`}
-                        className="h-full w-full object-cover rounded-sm"
-                      />
-                    ) : (
-                      <div className="h-full w-full bg-muted rounded-sm flex items-center justify-center">
-                        <span className="text-muted-foreground text-xs">No image</span>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-medium">{game.name}</h3>
-                    {game.yearPublished && (
-                      <p className="text-sm text-muted-foreground">
-                        Published: {game.yearPublished}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {index < games.length - 1 && <Separator />}
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-center p-4">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            )}
-          </ScrollArea>
+        <div className="absolute w-full mt-2 bg-background border rounded-md shadow-lg z-50 overflow-hidden">
+          <div className="h-[300px]">
+            <AutoSizer>
+              {({ width, height }: { width: number; height: number }) => (
+                <InfiniteLoader
+                  isRowLoaded={isRowLoaded}
+                  loadMoreRows={loadMoreRows}
+                  rowCount={searchResults.current.length}
+                  threshold={5}
+                >
+                  {({ onRowsRendered, registerChild }) => (
+                    <List
+                      ref={registerChild}
+                      width={width}
+                      height={height}
+                      rowCount={games.length}
+                      rowHeight={88}
+                      rowRenderer={rowRenderer}
+                      onRowsRendered={onRowsRendered}
+                    />
+                  )}
+                </InfiniteLoader>
+              )}
+            </AutoSizer>
+          </div>
         </div>
       )}
     </div>
   );
-} 
+}
