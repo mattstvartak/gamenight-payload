@@ -7,6 +7,12 @@ export const Games: CollectionConfig = {
   },
   fields: [
     {
+      name: "bggId",
+      type: "text",
+      unique: true,
+      index: true,
+    },
+    {
       name: "name",
       type: "text",
     },
@@ -15,9 +21,15 @@ export const Games: CollectionConfig = {
       type: "text",
     },
     {
-      name: "image",
-      type: "upload",
-      relationTo: "media",
+      name: "images",
+      type: "array",
+      fields: [
+        {
+          name: "image",
+          type: "upload",
+          relationTo: "media",
+        },
+      ],
     },
     {
       name: "affiliate link",

@@ -193,9 +193,15 @@ export interface Library {
  */
 export interface Game {
   id: number;
+  bggId?: string | null;
   name?: string | null;
   description?: string | null;
-  image?: (number | null) | Media;
+  images?:
+    | {
+        image?: (number | null) | Media;
+        id?: string | null;
+      }[]
+    | null;
   'affiliate link'?: string | null;
   type?: ('boardgame' | 'videogame' | 'cardgame' | 'tabletop' | 'other') | null;
   yearPublished?: number | null;
@@ -239,6 +245,24 @@ export interface Media {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+  sizes?: {
+    thumbnail?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    card?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -471,6 +495,30 @@ export interface MediaSelect<T extends boolean = true> {
   height?: T;
   focalX?: T;
   focalY?: T;
+  sizes?:
+    | T
+    | {
+        thumbnail?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+            };
+        card?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+            };
+      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -528,9 +576,15 @@ export interface GamenightsSelect<T extends boolean = true> {
  * via the `definition` "games_select".
  */
 export interface GamesSelect<T extends boolean = true> {
+  bggId?: T;
   name?: T;
   description?: T;
-  image?: T;
+  images?:
+    | T
+    | {
+        image?: T;
+        id?: T;
+      };
   'affiliate link'?: T;
   type?: T;
   yearPublished?: T;

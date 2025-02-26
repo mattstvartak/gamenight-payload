@@ -2,7 +2,6 @@
 
 import { useEffect, useState, use } from "react";
 import { Loader2, Users, Clock, CalendarDays } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface GameDetails {
@@ -32,31 +31,29 @@ interface PageParams {
 // Helper function to delay execution
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Helper function to retry failed requests
 async function fetchWithRetry(
   url: string,
-  retries = 3,
-  delayMs = 1000
+  maxRetries: number,
+  delayMs: number
 ): Promise<Response> {
-  for (let i = 0; i < retries; i++) {
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < maxRetries; i++) {
     try {
       const response = await fetch(url);
-
-      // BGG API sometimes returns 202 when the request is accepted but not ready
-      if (response.status === 202) {
-        await delay(delayMs);
-        continue;
-      }
-
       if (response.ok) {
         return response;
       }
+      lastError = new Error(`HTTP error! status: ${response.status}`);
     } catch (error) {
-      if (i === retries - 1) throw error;
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
+
+    // Wait before retrying
     await delay(delayMs);
   }
-  throw new Error(`Failed to fetch after ${retries} retries`);
+
+  throw lastError;
 }
 
 export default function GamePage({ params }: { params: Promise<PageParams> }) {
@@ -68,85 +65,15 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   useEffect(() => {
     async function fetchGameDetails() {
       try {
-        const response = await fetchWithRetry(
-          `https://boardgamegeek.com/xmlapi2/thing?id=${unwrappedParams.id}&stats=1`,
-          3,
-          1000
+        const response = await fetch(
+          `/api/games/get?bggId=${unwrappedParams.id}`
         );
-        const text = await response.text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(text, "text/xml");
-        const item = xmlDoc.querySelector("item");
-
-        if (!item) {
-          throw new Error("Game not found");
+        if (!response.ok) {
+          throw new Error("Failed to fetch game details");
         }
 
-        const nameElement = item.querySelector('name[type="primary"]');
-        const description = item.querySelector("description")?.textContent;
-        const yearPublished = item
-          .querySelector("yearpublished")
-          ?.getAttribute("value");
-        const thumbnail = item.querySelector("thumbnail")?.textContent;
-        const image = item.querySelector("image")?.textContent;
-        const minPlayers = Number(
-          item.querySelector("minplayers")?.getAttribute("value")
-        );
-        const maxPlayers = Number(
-          item.querySelector("maxplayers")?.getAttribute("value")
-        );
-        const minPlaytime = Number(
-          item.querySelector("minplaytime")?.getAttribute("value")
-        );
-        const maxPlaytime = Number(
-          item.querySelector("maxplaytime")?.getAttribute("value")
-        );
-        const minAge = Number(
-          item.querySelector("minage")?.getAttribute("value")
-        );
-        const rating = Number(
-          item
-            .querySelector("statistics > ratings > average")
-            ?.getAttribute("value")
-        );
-        const weight = Number(
-          item
-            .querySelector("statistics > ratings > averageweight")
-            ?.getAttribute("value")
-        );
-
-        const categories = Array.from(
-          item.querySelectorAll('link[type="boardgamecategory"]')
-        ).map((el) => el.getAttribute("value") || "");
-        const mechanics = Array.from(
-          item.querySelectorAll('link[type="boardgamemechanic"]')
-        ).map((el) => el.getAttribute("value") || "");
-        const designers = Array.from(
-          item.querySelectorAll('link[type="boardgamedesigner"]')
-        ).map((el) => el.getAttribute("value") || "");
-        const publishers = Array.from(
-          item.querySelectorAll('link[type="boardgamepublisher"]')
-        ).map((el) => el.getAttribute("value") || "");
-
-        setGame({
-          id: unwrappedParams.id,
-          name: nameElement?.getAttribute("value") || "",
-          yearPublished: yearPublished || undefined,
-          thumbnail: thumbnail || undefined,
-          image: image || undefined,
-          description: description || undefined,
-          minPlayers,
-          maxPlayers,
-          minPlaytime,
-          maxPlaytime,
-          minAge,
-          rating,
-          weight,
-          categories,
-          mechanics,
-          designers,
-          publishers,
-        });
+        const data = await response.json();
+        setGame(data.game);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load game details"
