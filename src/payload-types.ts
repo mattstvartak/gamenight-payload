@@ -159,6 +159,7 @@ export interface User {
       }[]
     | null;
   avatar?: (number | null) | Media;
+  role?: ('admin' | 'user') | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -471,6 +472,7 @@ export interface UsersSelect<T extends boolean = true> {
         id?: T;
       };
   avatar?: T;
+  role?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

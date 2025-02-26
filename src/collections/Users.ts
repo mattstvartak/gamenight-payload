@@ -83,5 +83,11 @@ export const Users: CollectionConfig = {
       relationTo: "media",
       unique: true,
     },
+    {
+      name: "role",
+      type: "select",
+      options: ["admin", "user"],
+      defaultValue: "user",
+    },
   ],
 };
