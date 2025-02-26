@@ -157,7 +157,7 @@ export async function GET(req: Request) {
 
     // Create the game using the create endpoint
     const createResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_SERVER_URL}/api/games/create`,
+      `/api/games/create`,
       {
         method: "POST",
         headers: {

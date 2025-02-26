@@ -1,30 +1,56 @@
 "use client"
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
 
 import { cn } from "@/lib/utils"
+
+const ScrollAreaDynamic = dynamic(
+  () => import("@radix-ui/react-scroll-area").then((mod) => mod.Root),
+  { ssr: false }
+)
+
+const ScrollAreaViewportDynamic = dynamic(
+  () => import("@radix-ui/react-scroll-area").then((mod) => mod.Viewport),
+  { ssr: false }
+)
+
+const ScrollAreaCornerDynamic = dynamic(
+  () => import("@radix-ui/react-scroll-area").then((mod) => mod.Corner),
+  { ssr: false }
+)
 
 function ScrollArea({
   className,
   children,
   ...props
 }: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+  const [isMounted, setIsMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  if (!isMounted) {
+    return <div className={cn("relative", className)}>{children}</div>
+  }
+
   return (
-    <ScrollAreaPrimitive.Root
+    <ScrollAreaDynamic
       data-slot="scroll-area"
       className={cn("relative", className)}
       {...props}
     >
-      <ScrollAreaPrimitive.Viewport
+      <ScrollAreaViewportDynamic
         data-slot="scroll-area-viewport"
         className="ring-ring/10 dark:ring-ring/20 dark:outline-ring/40 outline-ring/50 size-full rounded-[inherit] transition-[color,box-shadow] focus-visible:ring-4 focus-visible:outline-1"
       >
         {children}
-      </ScrollAreaPrimitive.Viewport>
+      </ScrollAreaViewportDynamic>
       <ScrollBar />
-      <ScrollAreaPrimitive.Corner />
-    </ScrollAreaPrimitive.Root>
+      <ScrollAreaCornerDynamic />
+    </ScrollAreaDynamic>
   )
 }
 
