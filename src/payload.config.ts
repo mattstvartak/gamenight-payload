@@ -46,7 +46,7 @@ export default buildConfig({
     pool: {
       connectionString: process.env.POSTGRES_URL || "",
       ssl: {
-        ca: process.env.SUPABASE_CA_CERT,
+        ca: process.env.SUPABASE_CA_CERT || "",
       }
     },
   }),
