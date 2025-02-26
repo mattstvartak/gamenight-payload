@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { GameSearch } from "@/components/GameSearch";
 import config from "@/payload.config";
 
 export default async function HomePage() {
@@ -56,13 +56,7 @@ export default async function HomePage() {
         <section className="mb-16">
           <div className="flex flex-col items-center space-y-6">
             <h2 className="text-4xl font-bold text-center">Find Your Next Game</h2>
-            <div className="w-full max-w-2xl">
-              <Input
-                type="search"
-                placeholder="Search games..."
-                className="w-full cursor-text"
-              />
-            </div>
+            <GameSearch />
           </div>
         </section>
 

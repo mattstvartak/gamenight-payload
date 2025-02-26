@@ -51,7 +51,7 @@ export const Games: CollectionConfig = {
     {
       name: "complexity",
       type: "number",
-    }, 
+    },
     {
       name: "official link",
       type: "text",

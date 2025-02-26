@@ -17,17 +17,27 @@ const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
 export default buildConfig({
+  serverURL: 'http://localhost:3000',
   admin: {
     user: Users.slug,
-    importMap: {
-      baseDir: path.resolve(dirname),
+    meta: {
+      titleSuffix: "- GameNight",
+      favicon: "/assets/favicon.ico",
+      ogImage: "/assets/og-image.jpg",
     },
   },
-  collections: [Users, Media, Libraries, Notes, GameNights, Games],
+  collections: [
+    Users,
+    Media,
+    Libraries,
+    Notes,
+    GameNights,
+    Games,
+  ],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || "",
   typescript: {
-    outputFile: path.resolve(dirname, "payload-types.ts"),
+    outputFile: path.resolve(__dirname, "payload-types.ts"),
   },
   db: postgresAdapter({
     pool: {
@@ -39,4 +49,28 @@ export default buildConfig({
     payloadCloudPlugin(),
     // storage-adapter-placeholder
   ],
+  graphQL: {
+    schemaOutputFile: path.resolve(__dirname, 'generated-schema.graphql'),
+  },
+  upload: {
+    limits: {
+      fileSize: 5000000, // 5MB
+    },
+    image: {
+      imgix: {
+        transformFormat: true,
+      },
+      formatOptions: {
+        format: "webp",
+        options: {
+          quality: 85,
+        },
+      },
+      resizeOptions: {
+        width: 1920,
+        height: 1080,
+        fit: sharp.fit.inside,
+      },
+    },
+  },
 });
