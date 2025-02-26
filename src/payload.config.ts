@@ -13,11 +13,13 @@ import { Libraries } from "./collections/Libraries";
 import { Notes } from "./collections/Notes";
 import { GameNights } from "./collections/GameNights";
 import { Games } from "./collections/Games";
-const filename = fileURLToPath(import.meta.url);
-const dirname = path.dirname(filename);
+import { Categories } from "./collections/Categories";
+import { Mechanics } from "./collections/Mechanics";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default buildConfig({
-  serverURL: 'http://localhost:3000',
+  serverURL: "http://localhost:3000",
   admin: {
     user: Users.slug,
     meta: {
@@ -33,6 +35,8 @@ export default buildConfig({
     Notes,
     GameNights,
     Games,
+    Categories,
+    Mechanics,
   ],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || "",
@@ -50,7 +54,7 @@ export default buildConfig({
     // storage-adapter-placeholder
   ],
   graphQL: {
-    schemaOutputFile: path.resolve(__dirname, 'generated-schema.graphql'),
+    schemaOutputFile: path.resolve(__dirname, "generated-schema.graphql"),
   },
   upload: {
     limits: {

@@ -26,7 +26,7 @@ export const Games: CollectionConfig = {
     {
       name: "type",
       type: "select",
-      options: ["boardgame", "videogame", "cardgame", "tabletop","other"],
+      options: ["boardgame", "videogame", "cardgame", "tabletop", "other"],
     },
     {
       name: "yearPublished",
@@ -59,6 +59,28 @@ export const Games: CollectionConfig = {
     {
       name: "official link",
       type: "text",
-    }
+    },
+    {
+      name: "categories",
+      type: "array",
+      fields: [
+        {
+          name: "category",
+          type: "relationship",
+          relationTo: "categories",
+        },
+      ],
+    },
+    {
+      name: "mechanics",
+      type: "array",
+      fields: [
+        {
+          name: "mechanic",
+          type: "relationship",
+          relationTo: "mechanics",
+        },
+      ],
+    },
   ],
 };

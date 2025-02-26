@@ -72,6 +72,8 @@ export interface Config {
     notes: Note;
     gamenights: Gamenight;
     games: Game;
+    categories: Category;
+    mechanics: Mechanic;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
@@ -84,6 +86,8 @@ export interface Config {
     notes: NotesSelect<false> | NotesSelect<true>;
     gamenights: GamenightsSelect<false> | GamenightsSelect<true>;
     games: GamesSelect<false> | GamesSelect<true>;
+    categories: CategoriesSelect<false> | CategoriesSelect<true>;
+    mechanics: MechanicsSelect<false> | MechanicsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
@@ -194,6 +198,7 @@ export interface Game {
   image?: (number | null) | Media;
   'affiliate link'?: string | null;
   type?: ('boardgame' | 'videogame' | 'cardgame' | 'tabletop' | 'other') | null;
+  yearPublished?: number | null;
   minPlayers?: number | null;
   maxPlayers?: number | null;
   minPlaytime?: number | null;
@@ -201,6 +206,18 @@ export interface Game {
   minAge?: number | null;
   complexity?: number | null;
   'official link'?: string | null;
+  categories?:
+    | {
+        category?: (number | null) | Category;
+        id?: string | null;
+      }[]
+    | null;
+  mechanics?:
+    | {
+        mechanic?: (number | null) | Mechanic;
+        id?: string | null;
+      }[]
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -222,6 +239,26 @@ export interface Media {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  name?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "mechanics".
+ */
+export interface Mechanic {
+  id: number;
+  name?: string | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -322,6 +359,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'games';
         value: number | Game;
+      } | null)
+    | ({
+        relationTo: 'categories';
+        value: number | Category;
+      } | null)
+    | ({
+        relationTo: 'mechanics';
+        value: number | Mechanic;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -488,6 +533,7 @@ export interface GamesSelect<T extends boolean = true> {
   image?: T;
   'affiliate link'?: T;
   type?: T;
+  yearPublished?: T;
   minPlayers?: T;
   maxPlayers?: T;
   minPlaytime?: T;
@@ -495,6 +541,36 @@ export interface GamesSelect<T extends boolean = true> {
   minAge?: T;
   complexity?: T;
   'official link'?: T;
+  categories?:
+    | T
+    | {
+        category?: T;
+        id?: T;
+      };
+  mechanics?:
+    | T
+    | {
+        mechanic?: T;
+        id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories_select".
+ */
+export interface CategoriesSelect<T extends boolean = true> {
+  name?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "mechanics_select".
+ */
+export interface MechanicsSelect<T extends boolean = true> {
+  name?: T;
   updatedAt?: T;
   createdAt?: T;
 }
