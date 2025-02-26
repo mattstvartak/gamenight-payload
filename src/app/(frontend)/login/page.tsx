@@ -158,7 +158,7 @@ export default function LoginPage() {
           });
 
           if (loginResponse.ok) {
-            router.push('/dashboard');
+            router.push('/');
           }
         }
       } else {
@@ -174,7 +174,7 @@ export default function LoginPage() {
         });
 
         if (loginResponse.ok) {
-          router.push('/dashboard');
+          router.push('/');
         } else {
           throw new Error('Login failed');
         }
