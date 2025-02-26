@@ -11,6 +11,26 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { AuthGuard } from "@/components/AuthGuard";
+import { AddToLibraryDropdown } from "@/components/AddToLibraryDropdown";
 
 interface MediaImage {
   id: number;
@@ -48,10 +68,22 @@ interface GameDetails {
   designers?: string[];
   publishers?: string[];
   images?: { image: MediaImage }[];
+  bggId: string;
 }
 
 interface PageParams {
   id: string;
+}
+
+interface Library {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface User {
+  id: string;
+  libraries?: { library: Library }[];
 }
 
 // Helper function to delay execution
@@ -114,6 +146,8 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   const [game, setGame] = useState<GameDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
 
   useEffect(() => {
     async function fetchGameDetails() {
@@ -126,7 +160,10 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
         }
 
         const data = await response.json();
-        setGame(data.game);
+        setGame({
+          ...data.game,
+          bggId: unwrappedParams.id, // Ensure bggId is set from the URL parameter
+        });
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load game details"
@@ -136,7 +173,23 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
       }
     }
 
+    async function fetchUserDetails() {
+      try {
+        setIsLoadingUser(true);
+        const response = await fetch("/api/users/me");
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch user details:", err);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    }
+
     fetchGameDetails();
+    fetchUserDetails();
   }, [unwrappedParams.id]);
 
   if (isLoading) {
@@ -236,7 +289,63 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
         {/* Details Card */}
         <Card className="md:col-span-1">
           <CardHeader>
-            <CardTitle>{game.name}</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>{game.name}</CardTitle>
+              <AuthGuard
+                fallback={
+                  <Button variant="outline" asChild>
+                    <a href="/login">Login to Add to Library</a>
+                  </Button>
+                }
+              >
+                <AddToLibraryDropdown
+                  libraries={user?.libraries || []}
+                  gameId={game.bggId}
+                  onAddToLibraries={async (libraryIds) => {
+                    await Promise.all(
+                      libraryIds.map((libraryId) =>
+                        fetch("/api/libraries/add-game", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            libraryId,
+                            gameId: game.bggId,
+                          }),
+                        })
+                      )
+                    );
+                  }}
+                  onCreateLibrary={async (name) => {
+                    const response = await fetch("/api/libraries/create", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({ name }),
+                    });
+
+                    if (!response.ok) {
+                      throw new Error("Failed to create library");
+                    }
+
+                    const newLibrary = await response.json();
+                    setUser((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            libraries: [
+                              ...(prev.libraries || []),
+                              { library: newLibrary },
+                            ],
+                          }
+                        : null
+                    );
+                  }}
+                />
+              </AuthGuard>
+            </div>
             {game.yearPublished && (
               <div className="flex items-center gap-1 text-muted-foreground mt-1">
                 <CalendarDays className="h-4 w-4" />
