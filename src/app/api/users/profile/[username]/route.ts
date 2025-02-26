@@ -8,7 +8,6 @@ export async function GET(
 ) {
   const { username } = await params;
   
-  console.log(username);
   try {
     const payload = await getPayload({
       config,

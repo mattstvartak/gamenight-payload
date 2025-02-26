@@ -133,7 +133,7 @@ export default function LoginPage() {
 
     try {
       if (isNewUser) {
-        const createResponse = await fetch('/api/users', {
+        const createResponse = await fetch('/api/users/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -145,21 +145,26 @@ export default function LoginPage() {
           }),
         });
 
-        if (createResponse.ok) {
-          const loginResponse = await fetch('/api/users/login', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email,
-              password,
-            }),
-          });
+        if (!createResponse.ok) {
+          const errorData = await createResponse.json();
+          throw new Error(errorData.error || 'Failed to create account');
+        }
 
-          if (loginResponse.ok) {
-            router.push('/');
-          }
+        const loginResponse = await fetch('/api/users/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        });
+
+        if (loginResponse.ok) {
+          router.push('/');
+        } else {
+          throw new Error('Login failed after account creation');
         }
       } else {
         const loginResponse = await fetch('/api/users/login', {
@@ -180,12 +185,11 @@ export default function LoginPage() {
         }
       }
     } catch (error) {
-      console.error('Auth error:', error);
-      setErrors({ 
-        password: isNewUser 
-          ? 'Error creating account' 
-          : 'Invalid email or password' 
-      });
+      console.error('Authentication error:', error);
+      setErrors(prev => ({
+        ...prev,
+        submit: error instanceof Error ? error.message : 'Authentication failed'
+      }));
     } finally {
       setIsLoading(false);
     }
@@ -371,6 +375,9 @@ export default function LoginPage() {
           </CardContent>
 
           <CardFooter className="mt-10 flex flex-col gap-4">
+            {errors.submit && (
+              <p className="text-sm text-red-500 text-center">{errors.submit}</p>
+            )}
             <Button 
               type="submit" 
               className="w-full"

@@ -130,6 +130,7 @@ export interface UserAuthOperations {
  */
 export interface User {
   id: number;
+  roles?: ('admin' | 'user')[] | null;
   username: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -353,6 +354,7 @@ export interface Note {
     };
     [k: string]: unknown;
   } | null;
+  user: number | User;
   updatedAt: string;
   createdAt: string;
 }
@@ -442,6 +444,7 @@ export interface PayloadMigration {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  roles?: T;
   username?: T;
   firstName?: T;
   lastName?: T;
@@ -549,6 +552,7 @@ export interface LibrariesSelect<T extends boolean = true> {
 export interface NotesSelect<T extends boolean = true> {
   name?: T;
   notes?: T;
+  user?: T;
   updatedAt?: T;
   createdAt?: T;
 }

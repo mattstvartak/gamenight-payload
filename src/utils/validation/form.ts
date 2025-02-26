@@ -1,12 +1,13 @@
 import { isValidEmail } from './email';
 import { validatePassword, isPasswordValid } from './password';
 
-export interface ValidationErrors {
+export type ValidationErrors = {
   email?: string;
   password?: string;
-  confirmPassword?: string;
   username?: string;
-}
+  confirmPassword?: string;
+  submit?: string;
+};
 
 export const validateLoginForm = (
   email: string,

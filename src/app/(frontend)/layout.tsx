@@ -3,8 +3,11 @@ import { ThemeProvider } from 'next-themes'
 import "../globals.css";
 
 export const metadata = {
-  description: "A blank template using Payload in a Next.js app.",
-  title: "Payload Blank Template",
+  description: "A Game Night planning app and library manager for game enthusiasts.",
+  title: "GameNight App",
+  icons: {
+    icon: '/images/favicon.png', // /public path
+  },
 };
 
 export default async function RootLayout(props: { children: React.ReactNode }) {

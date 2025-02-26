@@ -1,7 +1,7 @@
 {
   "name": "gamenight-payload",
   "version": "1.0.0",
-  "description": "A blank template to get started with Payload 3.0",
+  "description": "A Game Night planning app and library manager for game enthusiasts.",
   "license": "MIT",
   "type": "module",
   "scripts": {

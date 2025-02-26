@@ -1,9 +1,24 @@
 import type { CollectionConfig } from "payload";
+import { anyone } from "./access/anyone";
+import { admins } from "./access/admins";
+import { checkRole } from "./access/checkRole";
+import { adminsAndUser } from "./access/adminsAndUser";
 
 export const Games: CollectionConfig = {
   slug: "games",
   admin: {
     useAsTitle: "name",
+    group: "Content",
+  },
+  access: {
+    read: adminsAndUser,
+    create: anyone,
+    update: adminsAndUser,
+    delete: admins,
+    admin: ({ req: { user } }) => {
+      if (!user) return false;
+      return checkRole(['admin'], user);
+    },
   },
   fields: [
     {
