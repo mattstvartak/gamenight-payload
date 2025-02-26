@@ -6,7 +6,8 @@ import { isValidEmail } from '@/utils/validation/email';
 
 export async function POST(req: Request) {
   try {
-    const { email, password, username } = await req.json();
+    const body = await req.json();
+    const { email, password, username } = body;
 
     // Validate required fields
     if (!email || !password || !username) {
@@ -78,6 +79,7 @@ export async function POST(req: Request) {
         email,
         password,
         username,
+        roles: ['user'],
       },
     });
 

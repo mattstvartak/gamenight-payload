@@ -38,8 +38,6 @@ export default async function ProfilePage({ params }: PageProps) {
 
     // Fetch profile user
     const url = `${process.env.NEXT_PUBLIC_SERVER_URL}/api/users/profile/${id}`;
-    console.log('Fetching from URL:', url);
-
     const response = await fetch(url, {
       cache: 'no-store',
       headers: {

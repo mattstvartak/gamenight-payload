@@ -1,23 +1,19 @@
 import { getPayload } from "payload";
 import { NextResponse } from "next/server";
 import config from "@/payload.config";
-import { headers as getHeaders } from "next/headers";
-import type { Library, Game } from "@/payload-types";
+import type { Game } from "@/payload-types";
 
 export async function POST(req: Request) {
   try {
-    const headers = await getHeaders();
     const payload = await getPayload({
       config,
     });
 
     const body = await req.json();
-    console.log("Received request body:", body);
 
     const { libraryId, gameId } = body;
 
     if (!libraryId || !gameId) {
-      console.log("Missing required fields:", { libraryId, gameId });
       return NextResponse.json(
         { error: "Library ID and Game ID are required" },
         { status: 400 }

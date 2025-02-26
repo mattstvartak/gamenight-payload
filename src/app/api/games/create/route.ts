@@ -24,7 +24,6 @@ function getFilenameFromUrl(url: string): string {
   try {
     const urlPath = new URL(url).pathname;
     const filename = urlPath.split("/").pop();
-    console.log("filename", filename);
     return filename || "image.jpg";
   } catch (e) {
     // If URL parsing fails, extract filename from the last part of the URL
@@ -108,7 +107,6 @@ export async function POST(req: Request) {
 
     // Handle main image
     if (gameDetails.image) {
-      console.log("gameDetails.image", gameDetails.image);
       const filename = getFilenameFromUrl(gameDetails.image);
       const storagePath = createStoragePath(gameDetails.name, filename);
 

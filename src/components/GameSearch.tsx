@@ -21,8 +21,6 @@ async function fetchWithRetry(
   for (let i = 0; i < retries; i++) {
     try {
       const response = await fetch(url);
-      console.log(response);
-      console.log(url)
 
       // BGG API sometimes returns 202 when the request is accepted but not ready
       if (response.status === 202) {
