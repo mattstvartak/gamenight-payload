@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPayload } from "payload";
 import config from "@/payload.config";
 import { JSDOM } from "jsdom";
+import { getBaseURL } from "@/lib/utils/getBaseURL";
 
 async function fetchBGGGameDetails(bggId: string) {
   const response = await fetch(
@@ -157,7 +158,7 @@ export async function GET(req: Request) {
 
     // Create the game using the create endpoint
     const createResponse = await fetch(
-      `/api/games/create`,
+      `${getBaseURL()}/api/games/create`,
       {
         method: "POST",
         headers: {
