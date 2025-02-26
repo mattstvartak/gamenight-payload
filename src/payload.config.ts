@@ -6,6 +6,7 @@ import { lexicalEditor } from "@payloadcms/richtext-lexical";
 import path from "path";
 import { buildConfig } from "payload";
 import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
 import sharp from "sharp";
 
 import { Users } from "./collections/Users";
@@ -45,6 +46,11 @@ export default buildConfig({
   db: postgresAdapter({
     pool: {
       connectionString: process.env.POSTGRES_URL || "",
+      ssl: {
+        ca: process.env.SUPABASE_CA_CERT?.includes('-----BEGIN CERTIFICATE-----')
+        ? process.env.SUPABASE_CA_CERT
+        : readFileSync(process.env.SUPABASE_CA_CERT!),
+      }
     },
   }),
   sharp,
