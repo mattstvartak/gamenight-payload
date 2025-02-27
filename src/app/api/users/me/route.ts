@@ -13,10 +13,15 @@ export async function GET(req: Request) {
     const { user } = await payload.auth({ headers });
 
     if (!user) {
-      return NextResponse.json(
-        { error: "User not authenticated" },
-        { status: 401 }
-      );
+      // Return a default response for unauthenticated users
+      return NextResponse.json({
+        id: null,
+        username: null,
+        firstName: null,
+        lastName: null,
+        libraries: [],
+        isAuthenticated: false
+      });
     }
 
     // Only return necessary information
@@ -26,14 +31,20 @@ export async function GET(req: Request) {
       firstName: user.firstName,
       lastName: user.lastName,
       libraries: user.libraries,
+      isAuthenticated: true
     };
 
     return NextResponse.json(publicUser);
   } catch (error) {
     console.error("Error fetching user:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch user" },
-      { status: 500 }
-    );
+    // Return the same default response on error
+    return NextResponse.json({
+      id: null,
+      username: null,
+      firstName: null,
+      lastName: null,
+      libraries: [],
+      isAuthenticated: false
+    });
   }
 }
