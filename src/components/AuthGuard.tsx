@@ -16,7 +16,7 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
       try {
         const response = await fetch("/api/users/me");
         const result = await response.json();
-        setIsAuthenticated(!!result.id);
+        setIsAuthenticated(result.isAuthenticated);
       } catch (error) {
         console.error("Auth check error:", error);
         setIsAuthenticated(false);
