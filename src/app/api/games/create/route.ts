@@ -88,7 +88,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check if game already exists in Payload
+    // Check if game already exists in Payload using unauthenticated access
     const existingGame = await payload.find({
       collection: "games",
       where: {
@@ -96,6 +96,7 @@ export async function POST(req: Request) {
           equals: bggId,
         },
       },
+      user: null, // Explicitly set user to null for unauthenticated access
     });
 
     if (existingGame.docs.length > 0) {
@@ -117,13 +118,14 @@ export async function POST(req: Request) {
         collection: "media",
         data: {
           alt: `${gameDetails.name} main image`,
-          prefix: storagePath.replace(filename, ""), // Store the path prefix separately
+          prefix: storagePath.replace(filename, ""),
           gameId: bggId,
           gameName: gameDetails.name
             .replace(/[^a-zA-Z0-9-_]/g, "-")
             .toLowerCase(),
         },
         file,
+        user: null, // Explicitly set user to null for unauthenticated access
       });
       imageIds.push({ image: mainMedia.id });
     }
@@ -142,13 +144,14 @@ export async function POST(req: Request) {
             collection: "media",
             data: {
               alt: `${gameDetails.name} additional image`,
-              prefix: storagePath.replace(filename, ""), // Store the path prefix separately
+              prefix: storagePath.replace(filename, ""),
               gameId: bggId,
               gameName: gameDetails.name
                 .replace(/[^a-zA-Z0-9-_]/g, "-")
                 .toLowerCase(),
             },
             file,
+            user: null, // Explicitly set user to null for unauthenticated access
           });
           return { image: media.id };
         }
@@ -169,6 +172,7 @@ export async function POST(req: Request) {
                 equals: categoryName,
               },
             },
+            user: null, // Explicitly set user to null for unauthenticated access
           });
 
           if (existingCategory.docs.length > 0) {
@@ -178,6 +182,7 @@ export async function POST(req: Request) {
           const newCategory = await payload.create({
             collection: "categories",
             data: { name: categoryName },
+            user: null, // Explicitly set user to null for unauthenticated access
           });
           return newCategory.id;
         } catch (error) {
@@ -201,6 +206,7 @@ export async function POST(req: Request) {
                 equals: mechanicName,
               },
             },
+            user: null, // Explicitly set user to null for unauthenticated access
           });
 
           if (existingMechanic.docs.length > 0) {
@@ -210,6 +216,7 @@ export async function POST(req: Request) {
           const newMechanic = await payload.create({
             collection: "mechanics",
             data: { name: mechanicName },
+            user: null, // Explicitly set user to null for unauthenticated access
           });
           return newMechanic.id;
         } catch (error) {
@@ -247,6 +254,7 @@ export async function POST(req: Request) {
           .map((id) => ({ mechanic: id })),
         images: imageIds,
       },
+      user: null, // Explicitly set user to null for unauthenticated access
     });
 
     return NextResponse.json(game);
