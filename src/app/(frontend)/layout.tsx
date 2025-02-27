@@ -2,6 +2,10 @@ import React from "react";
 import { ThemeProvider } from "next-themes";
 import "../globals.css";
 import AppProvider from "@/components/app-provider";
+import { Toaster } from "@/components/toaster";
+import { Inter } from "next/font/google";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   description:
@@ -21,6 +25,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
         <ThemeProvider enableSystem={true}>
           <AppProvider>
             <main>{children}</main>
+            <Toaster />
           </AppProvider>
         </ThemeProvider>
       </body>

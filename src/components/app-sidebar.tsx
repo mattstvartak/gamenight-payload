@@ -31,12 +31,13 @@ import { User } from "@/payload-types";
 import Image from "next/image";
 import { Calendar } from "@/components/ui/calendar";
 import { NavCalendar } from "./nav-calendar";
+import { useUser } from "@/contexts/user-context";
 
-type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
-  user?: User | null;
-};
+type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
 
-export function AppSidebar({ user, ...props }: AppSidebarProps) {
+export function AppSidebar(props: AppSidebarProps) {
+  const { user } = useUser();
+
   const data = {
     teams: [
       {

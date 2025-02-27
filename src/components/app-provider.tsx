@@ -1,6 +1,7 @@
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { getCurrentUser } from "@/utils/auth";
+import { UserProvider } from "@/contexts/user-context";
 
 export const AppProvider = async ({
   children,
@@ -11,11 +12,14 @@ export const AppProvider = async ({
 
   return (
     <>
-      <SidebarProvider>
-        <AppSidebar user={user} />
-        <SidebarInset>{children}</SidebarInset>
-      </SidebarProvider>
+      <UserProvider user={user}>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>{children}</SidebarInset>
+        </SidebarProvider>
+      </UserProvider>
     </>
   );
 };
+
 export default AppProvider;
