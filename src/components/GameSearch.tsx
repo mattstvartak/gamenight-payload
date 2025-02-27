@@ -236,7 +236,17 @@ async function preloadImagesInOrder(
   }
 }
 
-export function GameSearch() {
+interface GameSearchProps {
+  libraryId?: string;
+  onGameAdded?: () => void;
+  onGameClick?: (bggId: string) => void;
+}
+
+export function GameSearch({
+  libraryId,
+  onGameAdded,
+  onGameClick,
+}: GameSearchProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [games, setGames] = useState<SearchGame[]>([]);
@@ -536,8 +546,33 @@ export function GameSearch() {
     return Boolean(games[index]?.isLoaded);
   };
 
-  const handleGameClick = (bggId: string) => {
-    router.push(`/game/${bggId}`);
+  const handleGameClick = async (bggId: string) => {
+    if (libraryId) {
+      try {
+        const response = await fetch("/api/libraries/add-game", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            libraryId,
+            gameId: bggId,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to add game to library");
+        }
+
+        onGameAdded?.();
+      } catch (error) {
+        console.error("Error adding game to library:", error);
+      }
+    } else if (onGameClick) {
+      onGameClick(bggId);
+    } else {
+      router.push(`/games/${bggId}`);
+    }
   };
 
   const rowRenderer = ({

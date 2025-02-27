@@ -1,11 +1,11 @@
 "use client";
 
 import { useUser } from "@/contexts/user-context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { Game, Library } from "@/payload-types";
 import Link from "next/link";
 import Image from "next/image";
-import { Trash2 } from "lucide-react";
+import { Trash2, Plus, Loader2 } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -18,6 +18,14 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { GameSearch } from "@/components/GameSearch";
 
 interface LibraryContentProps {
   libraryId: string;
@@ -29,8 +37,15 @@ export function LibraryContent({ libraryId }: LibraryContentProps) {
   const [library, setLibrary] = useState<Library | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRemoving, setIsRemoving] = useState<number | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [isAddingGame, setIsAddingGame] = useState(false);
+  const [newGameName, setNewGameName] = useState<string | null>(null);
+  const [selectedGame, setSelectedGame] = useState<{
+    bggId: string;
+    name: string;
+  } | null>(null);
 
-  const fetchLibrary = async () => {
+  const fetchLibrary = useCallback(async () => {
     try {
       // Check if user has access to this library
       const userHasAccess = user?.libraries?.some(
@@ -57,13 +72,11 @@ export function LibraryContent({ libraryId }: LibraryContentProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [libraryId, user]);
 
   useEffect(() => {
-    if (user) {
-      fetchLibrary();
-    }
-  }, [libraryId, user]);
+    fetchLibrary();
+  }, [fetchLibrary]);
 
   const handleRemoveGame = async (gameId: number) => {
     try {
@@ -197,7 +210,7 @@ export function LibraryContent({ libraryId }: LibraryContentProps) {
               <div className="group relative" key={game.id}>
                 <Link
                   href={`/games/${game.bggId}`}
-                  className="block aspect-square rounded-xl bg-muted/50 overflow-hidden relative"
+                  className="block aspect-square rounded-xl bg-muted/50 overflow-hidden relative cursor-pointer"
                 >
                   {imageUrl ? (
                     <Image
@@ -220,7 +233,7 @@ export function LibraryContent({ libraryId }: LibraryContentProps) {
                 <Button
                   variant="destructive"
                   size="icon"
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                   onClick={(e) => {
                     e.preventDefault();
                     handleRemoveGame(game.id);
@@ -232,6 +245,48 @@ export function LibraryContent({ libraryId }: LibraryContentProps) {
               </div>
             );
           })}
+          {isAddingGame && (
+            <div className="aspect-square rounded-xl bg-muted/50 overflow-hidden relative flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Adding game...</p>
+              </div>
+            </div>
+          )}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                className="aspect-square rounded-xl bg-muted/50 flex items-center justify-center group hover:bg-muted/70 transition-colors h-auto p-0 cursor-pointer"
+              >
+                <Plus className="h-8 w-8 text-muted-foreground group-hover:scale-110 transition-transform" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Add Game to Library</DialogTitle>
+              </DialogHeader>
+              <div className="mt-4">
+                <GameSearch
+                  libraryId={libraryId}
+                  onGameClick={(bggId) => {
+                    setIsAddingGame(true);
+                    setDialogOpen(false);
+                  }}
+                  onGameAdded={() => {
+                    fetchLibrary();
+                    setIsAddingGame(false);
+                    setNewGameName(null);
+                    setDialogOpen(false);
+                    toast({
+                      title: "Game added",
+                      description: "The game has been added to your library",
+                    });
+                  }}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </>
