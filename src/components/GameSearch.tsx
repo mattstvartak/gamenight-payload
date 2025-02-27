@@ -11,7 +11,10 @@ import { useRouter } from "next/navigation";
 
 // Global cache for search results and images
 const SEARCH_CACHE_SIZE = 50;
-const searchCache = new Map<string, { results: SearchResult[]; timestamp: number }>();
+const searchCache = new Map<
+  string,
+  { results: SearchResult[]; timestamp: number }
+>();
 const imageCache = new Map<string, string>();
 
 // Cache expiration time (30 minutes)
@@ -69,8 +72,9 @@ async function preloadImage(url: string | null | undefined): Promise<void> {
   if (!url) {
     return Promise.resolve(); // Silently resolve for missing URLs
   }
-  
-  return new Promise((resolve) => { // Remove reject from Promise constructor
+
+  return new Promise((resolve) => {
+    // Remove reject from Promise constructor
     // Check if image is already cached
     if (imageCache.has(url)) {
       resolve();
@@ -90,12 +94,14 @@ async function preloadImage(url: string | null | undefined): Promise<void> {
 }
 
 // Helper function to get the best thumbnail URL
-function getBestThumbnailUrl(images: { image?: number | Media | null }[]): string | null {
+function getBestThumbnailUrl(
+  images: { image?: number | Media | null }[]
+): string | null {
   if (!images?.length) return null;
 
   for (const img of images) {
     if (!img.image || !isMedia(img.image)) continue;
-    
+
     // First try to get thumbnail version
     if (img.image.sizes?.thumbnail?.url) {
       return img.image.sizes.thumbnail.url;
@@ -139,7 +145,7 @@ function GameThumbnail({
 
     // Get the best thumbnail URL
     const thumbnailUrl = image.sizes?.thumbnail?.url || image.url;
-    
+
     if (!thumbnailUrl) {
       setLoadError(true);
       setImageLoaded(true);
@@ -155,25 +161,26 @@ function GameThumbnail({
     }
 
     // Preload image
-    preloadImage(thumbnailUrl)
-      .then(() => {
-        if (isMounted.current) {
-          if (thumbnailUrl && imageCache.has(thumbnailUrl)) {
-            setImageSrc(thumbnailUrl);
-            setImageLoaded(true);
-          } else {
-            setLoadError(true);
-            setImageLoaded(true);
-          }
+    preloadImage(thumbnailUrl).then(() => {
+      if (isMounted.current) {
+        if (thumbnailUrl && imageCache.has(thumbnailUrl)) {
+          setImageSrc(thumbnailUrl);
+          setImageLoaded(true);
+        } else {
+          setLoadError(true);
+          setImageLoaded(true);
         }
-      });
+      }
+    });
   }, [image]);
 
   if (loadError || !image || !isMedia(image)) {
     return (
       <div className="h-full w-full bg-muted rounded-sm flex items-center justify-center">
         <div className="text-center">
-          <span className="text-muted-foreground text-xs">{name.slice(0, 1)}</span>
+          <span className="text-muted-foreground text-xs">
+            {name.slice(0, 1)}
+          </span>
         </div>
       </div>
     );
@@ -204,10 +211,13 @@ function GameThumbnail({
 }
 
 // Helper function to preload multiple images in order
-async function preloadImagesInOrder(games: SearchGame[], priority = false): Promise<void> {
+async function preloadImagesInOrder(
+  games: SearchGame[],
+  priority = false
+): Promise<void> {
   const imagePromises = games
-    .filter(game => Array.isArray(game.images) && game.images.length > 0)
-    .map(game => {
+    .filter((game) => Array.isArray(game.images) && game.images.length > 0)
+    .map((game) => {
       if (!game.images) return null;
       const thumbnailUrl = getBestThumbnailUrl(game.images);
       if (!thumbnailUrl) return null;
@@ -246,7 +256,7 @@ export function GameSearch() {
   useEffect(() => {
     const cleanup = () => {
       const now = Date.now();
-      
+
       // Clean up search cache
       for (const [key, value] of searchCache.entries()) {
         if (now - value.timestamp > CACHE_EXPIRATION) {
@@ -259,7 +269,7 @@ export function GameSearch() {
         const entriesToDelete = Array.from(searchCache.entries())
           .sort((a, b) => a[1].timestamp - b[1].timestamp)
           .slice(0, searchCache.size - SEARCH_CACHE_SIZE);
-        
+
         for (const [key] of entriesToDelete) {
           searchCache.delete(key);
         }
@@ -322,7 +332,10 @@ export function GameSearch() {
                 gameCache.current.set(item.id, game);
                 return game;
               } catch (error) {
-                console.error(`Error fetching details for game ${item.id}:`, error);
+                console.error(
+                  `Error fetching details for game ${item.id}:`,
+                  error
+                );
                 const fallbackGame: SearchGame = {
                   bggId: item.id,
                   name: item.name,
@@ -357,7 +370,7 @@ export function GameSearch() {
       if (firstBatch.length > 0) {
         preloadImagesInOrder(firstBatch, true).catch(() => {});
       }
-      
+
       // Load remaining images in parallel
       const remainingBatch = newGames.slice(3);
       if (remainingBatch.length > 0) {
@@ -405,47 +418,55 @@ export function GameSearch() {
         const response = await fetch(
           `/api/games/search?query=${encodeURIComponent(query)}`
         );
-        
+
         const data = await response.json();
 
         if (response.status === 429) {
           // Rate limit hit - show as a game in the list
-          setGames([{
-            bggId: 'error',
-            name: 'Search limit reached',
-            error: 'Please wait a moment before searching again',
-            isLoaded: true,
-          }]);
+          setGames([
+            {
+              bggId: "error",
+              name: "Search limit reached",
+              error: "Please wait a moment before searching again",
+              isLoaded: true,
+            },
+          ]);
           return;
         }
 
         if (!response.ok) {
-          setGames([{
-            bggId: 'error',
-            name: 'Search failed',
-            error: data.error || 'Failed to search games',
-            isLoaded: true,
-          }]);
+          setGames([
+            {
+              bggId: "error",
+              name: "Search failed",
+              error: data.error || "Failed to search games",
+              isLoaded: true,
+            },
+          ]);
           return;
         }
-        
+
         if (!data.results || !Array.isArray(data.results)) {
-          setGames([{
-            bggId: 'error',
-            name: 'Invalid response',
-            error: 'Received invalid search results',
-            isLoaded: true,
-          }]);
+          setGames([
+            {
+              bggId: "error",
+              name: "Invalid response",
+              error: "Received invalid search results",
+              isLoaded: true,
+            },
+          ]);
           return;
         }
 
         if (data.results.length === 0) {
-          setGames([{
-            bggId: 'error',
-            name: 'No results',
-            error: `No games found matching "${query}"`,
-            isLoaded: true,
-          }]);
+          setGames([
+            {
+              bggId: "error",
+              name: "No results",
+              error: `No games found matching "${query}"`,
+              isLoaded: true,
+            },
+          ]);
           return;
         }
 
@@ -475,12 +496,17 @@ export function GameSearch() {
           Math.min(BATCH_SIZE, searchResults.current.length)
         );
       } catch (error) {
-        setGames([{
-          bggId: 'error',
-          name: 'Search error',
-          error: error instanceof Error ? error.message : 'An unexpected error occurred',
-          isLoaded: true,
-        }]);
+        setGames([
+          {
+            bggId: "error",
+            name: "Search error",
+            error:
+              error instanceof Error
+                ? error.message
+                : "An unexpected error occurred",
+            isLoaded: true,
+          },
+        ]);
       } finally {
         setIsLoading(false);
       }
@@ -511,7 +537,7 @@ export function GameSearch() {
   };
 
   const handleGameClick = (bggId: string) => {
-    router.push(`/games/${bggId}`);
+    router.push(`/game/${bggId}`);
   };
 
   const rowRenderer = ({
@@ -537,7 +563,10 @@ export function GameSearch() {
         >
           <div className="flex-shrink-0 h-16 w-16 mr-4 relative">
             {game.isLoaded ? (
-              <GameThumbnail image={game.images?.[0]?.image} name={game.name || ""} />
+              <GameThumbnail
+                image={game.images?.[0]?.image}
+                name={game.name || ""}
+              />
             ) : (
               <div className="h-full w-full bg-muted rounded-sm flex items-center justify-center">
                 <Loader2 className="h-4 w-4 animate-spin" />

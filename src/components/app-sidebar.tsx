@@ -158,6 +158,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
         ) || [],
   };
 
+  console.log("user", user);
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -167,14 +168,18 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
         </div>
       </SidebarHeader>
       <SidebarContent className="no-scrollbar">
-        <SidebarSeparator className="mx-0" />
-        <NavCalendar />
-        <SidebarSeparator className="mx-0 hide-on-collapsed" />
-        {/* <NavMain items={data.navMain} />
+        {user && (
+          <>
+            <SidebarSeparator className="mx-0" />
+            <NavCalendar />
+            <SidebarSeparator className="mx-0 hide-on-collapsed" />
+            {/* <NavMain items={data.navMain} />
         <SidebarSeparator className="mx-0" /> */}
-        <NavLibraries items={data.projects} />
-        <SidebarSeparator className="mx-0" />
-        <NavFriends items={data.projects} />
+            <NavLibraries items={data.projects} />
+            <SidebarSeparator className="mx-0" />
+            <NavFriends items={data.projects} />
+          </>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user ?? null} />
