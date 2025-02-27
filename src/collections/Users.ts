@@ -1,10 +1,10 @@
 import type { CollectionConfig } from "payload";
 import { checkRole } from "./access/checkRole";
 import { protectRoles } from "./hooks/protectRoles";
-import { loginAfterCreate } from './hooks/loginAfterCreate';
-import { adminsAndUser } from './access/adminsAndUser';
-import { admins } from './access/admins';
-import { anyone } from './access/anyone';
+import { loginAfterCreate } from "./hooks/loginAfterCreate";
+import { adminsAndUser } from "./access/adminsAndUser";
+import { admins } from "./access/admins";
+import { anyone } from "./access/anyone";
 export const Users: CollectionConfig = {
   slug: "users",
   admin: {
@@ -18,7 +18,7 @@ export const Users: CollectionConfig = {
     delete: admins,
     admin: ({ req: { user } }) => {
       if (!user) return false;
-      return checkRole(['admin'], user);
+      return checkRole(["admin"], user);
     },
   },
   hooks: {
@@ -27,22 +27,22 @@ export const Users: CollectionConfig = {
   defaultSort: "username",
   fields: [
     {
-      name: 'roles',
-      type: 'select',
+      name: "roles",
+      type: "select",
       hasMany: true,
       saveToJWT: true,
-      defaultValue: ['user'],
+      defaultValue: ["user"],
       hooks: {
         beforeChange: [protectRoles],
       },
       options: [
         {
-          label: 'Admin',
-          value: 'admin',
+          label: "Admin",
+          value: "admin",
         },
         {
-          label: 'User',
-          value: 'user',
+          label: "User",
+          value: "user",
         },
       ],
     },
@@ -62,8 +62,8 @@ export const Users: CollectionConfig = {
     },
     {
       name: "email",
-        type: "email",
-    required: true,
+      type: "email",
+      required: true,
     },
     {
       name: "phone",
@@ -77,8 +77,8 @@ export const Users: CollectionConfig = {
           name: "library",
           type: "relationship",
           relationTo: "libraries",
-        }
-      ]
+        },
+      ],
     },
     {
       name: "gameNights",
@@ -88,8 +88,8 @@ export const Users: CollectionConfig = {
           name: "game night",
           type: "relationship",
           relationTo: "gamenights",
-        }
-      ]
+        },
+      ],
     },
     {
       name: "friends",
@@ -100,8 +100,8 @@ export const Users: CollectionConfig = {
           type: "relationship",
           relationTo: "users",
           hasMany: true,
-        }
-      ]
+        },
+      ],
     },
     {
       name: "notebooks",
@@ -112,8 +112,8 @@ export const Users: CollectionConfig = {
           type: "relationship",
           relationTo: "notes",
           hasMany: true,
-        }
-      ]
+        },
+      ],
     },
     {
       name: "avatar",

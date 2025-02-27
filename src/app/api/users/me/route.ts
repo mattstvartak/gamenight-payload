@@ -13,38 +13,48 @@ export async function GET(req: Request) {
     const { user } = await payload.auth({ headers });
 
     if (!user) {
-      // Return a default response for unauthenticated users
       return NextResponse.json({
         id: null,
         username: null,
         firstName: null,
         lastName: null,
+        email: null,
+        roles: [],
         libraries: [],
-        isAuthenticated: false
+        gameNights: [],
+        phone: null,
+        isAuthenticated: false,
       });
     }
 
-    // Only return necessary information
+    // Return all user fields
     const publicUser = {
       id: user.id,
       username: user.username,
       firstName: user.firstName,
       lastName: user.lastName,
+      email: user.email,
+      roles: user.roles,
       libraries: user.libraries,
-      isAuthenticated: true
+      gameNights: user.gameNights,
+      phone: user.phone,
+      isAuthenticated: true,
     };
 
     return NextResponse.json(publicUser);
   } catch (error) {
     console.error("Error fetching user:", error);
-    // Return the same default response on error
     return NextResponse.json({
       id: null,
       username: null,
       firstName: null,
       lastName: null,
+      email: null,
+      roles: [],
       libraries: [],
-      isAuthenticated: false
+      gameNights: [],
+      phone: null,
+      isAuthenticated: false,
     });
   }
 }
