@@ -101,10 +101,14 @@ export function GameSearch() {
   const [searchQuery, setSearchQuery] = useState("");
   const [games, setGames] = useState<SearchGame[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const searchTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
   const searchResults = useRef<SearchResult[]>([]);
   const [hasNextPage, setHasNextPage] = useState(true);
+  const lastSearchTime = useRef<number>(0);
   const BATCH_SIZE = 10;
+  const SEARCH_DEBOUNCE = 500; // 500ms debounce
+  const MIN_SEARCH_INTERVAL = 1000; // 1 second minimum between searches
 
   const loadGameDetails = useCallback(
     async (startIndex: number, stopIndex: number) => {
@@ -115,56 +119,41 @@ export function GameSearch() {
 
       for (const item of itemsToLoad) {
         try {
-          await delay(250); // Add delay between requests
+          // Add a small delay between requests to avoid overwhelming the server
+          if (newGames.length > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
 
-          const detailsResponse = await fetchWithRetry(
-            `https://boardgamegeek.com/xmlapi2/thing?id=${item.id}`,
-            3,
-            1000
-          );
+          const response = await fetch(`/api/games/get?bggId=${item.id}`);
+          if (!response.ok) {
+            throw new Error("Failed to fetch game details");
+          }
 
-          const detailsText = await detailsResponse.text();
-          const detailsDoc = new DOMParser().parseFromString(
-            detailsText,
-            "text/xml"
-          );
-
-          const yearPublishedElement =
-            detailsDoc.querySelector("yearpublished");
-          const thumbnailElement = detailsDoc.querySelector("thumbnail");
-          const minPlayersElement = detailsDoc.querySelector("minplayers");
-          const maxPlayersElement = detailsDoc.querySelector("maxplayers");
-          const minPlayTimeElement = detailsDoc.querySelector("minplaytime");
-          const maxPlayTimeElement = detailsDoc.querySelector("maxplaytime");
+          const data = await response.json();
+          if (!data.game) {
+            throw new Error("Invalid game data received");
+          }
 
           newGames.push({
             bggId: item.id,
-            name: item.name,
-            minPlayers:
-              Number(minPlayersElement?.getAttribute("value")) || null,
-            maxPlayers:
-              Number(maxPlayersElement?.getAttribute("value")) || null,
-            minPlaytime:
-              Number(minPlayTimeElement?.getAttribute("value")) || null,
-            maxPlaytime:
-              Number(maxPlayTimeElement?.getAttribute("value")) || null,
-            images: thumbnailElement?.textContent
-              ? [{
-                  image: {
-                    id: 0,
-                    alt: `${item.name} thumbnail`,
-                    url: thumbnailElement.textContent,
-                    updatedAt: new Date().toISOString(),
-                    createdAt: new Date().toISOString(),
-                  } as Media,
-                  id: '0'
-                }]
-              : null,
+            name: data.game.name,
+            minPlayers: data.game.minPlayers,
+            maxPlayers: data.game.maxPlayers,
+            minPlaytime: data.game.minPlaytime,
+            maxPlaytime: data.game.maxPlaytime,
+            images: data.game.images,
             type: "boardgame",
             isLoaded: true,
           });
         } catch (error) {
           console.error(`Error fetching details for game ${item.id}:`, error);
+          // Add a placeholder for failed loads
+          newGames.push({
+            bggId: item.id,
+            name: item.name,
+            isLoaded: true,
+            type: "boardgame",
+          });
         }
       }
 
@@ -185,32 +174,42 @@ export function GameSearch() {
       if (!query) {
         setGames([]);
         searchResults.current = [];
+        setError(null);
         return;
       }
 
+      // Check if enough time has passed since the last search
+      const now = Date.now();
+      if (now - lastSearchTime.current < MIN_SEARCH_INTERVAL) {
+        return;
+      }
+      lastSearchTime.current = now;
+
       setIsLoading(true);
+      setError(null);
 
       try {
-        const response = await fetchWithRetry(
-          `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}`,
-          3,
-          1000
+        const response = await fetch(
+          `/api/games/search?query=${encodeURIComponent(query)}`
         );
-        const text = await response.text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(text, "text/xml");
-        const items = xmlDoc.getElementsByTagName("item");
+        if (!response.ok) {
+          throw new Error("Failed to search games");
+        }
 
-        // Store all search results with names
-        searchResults.current = Array.from(items)
-          .map((item) => {
-            const id = item.getAttribute("id");
-            const type = item.getAttribute("type");
-            const nameElement = item.querySelector("name");
-            const name = nameElement?.getAttribute("value") || "";
-            return id && type && name ? { id, type, name } : null;
-          })
-          .filter((item): item is SearchResult => item !== null);
+        const data = await response.json();
+        
+        if (!data.results || !Array.isArray(data.results)) {
+          throw new Error("Invalid search results received");
+        }
+
+        if (data.results.length === 0) {
+          setGames([]);
+          searchResults.current = [];
+          setError("No games found");
+          return;
+        }
+
+        searchResults.current = data.results;
 
         // Initialize games array with names from search results
         const initialGames: SearchGame[] = searchResults.current.map(
@@ -231,6 +230,9 @@ export function GameSearch() {
         );
       } catch (error) {
         console.error("Error searching games:", error);
+        setError(error instanceof Error ? error.message : "Failed to search games");
+        setGames([]);
+        searchResults.current = [];
       } finally {
         setIsLoading(false);
       }
@@ -239,7 +241,7 @@ export function GameSearch() {
   );
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = e.target.value.trim();
     setSearchQuery(value);
 
     if (searchTimeout.current) {
@@ -249,9 +251,10 @@ export function GameSearch() {
     if (value) {
       searchTimeout.current = setTimeout(() => {
         searchGames(value);
-      }, 500);
+      }, SEARCH_DEBOUNCE);
     } else {
       setGames([]);
+      setError(null);
     }
   };
 
