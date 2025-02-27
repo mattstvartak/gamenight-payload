@@ -6,16 +6,12 @@ import {
   BookOpen,
   Bot,
   Command,
-  Frame,
   GalleryVerticalEnd,
   LucideIcon,
-  Map,
-  PieChart,
   Settings2,
   SquareLibrary,
 } from "lucide-react";
 
-import { NavMain } from "@/components/nav-main";
 import { NavLibraries } from "@/components/nav-libraries";
 import { NavUser } from "@/components/nav-user";
 import {
@@ -27,9 +23,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { NavFriends } from "./nav-friends";
-import { User } from "@/payload-types";
 import Image from "next/image";
-import { Calendar } from "@/components/ui/calendar";
 import { NavCalendar } from "./nav-calendar";
 import { useUser } from "@/contexts/user-context";
 
@@ -69,7 +63,7 @@ export function AppSidebar(props: AppSidebarProps) {
               if (!library || typeof library === "number") return null;
               return {
                 title: library.name || "Untitled Library",
-                url: `/libraries/${library.id}`,
+                url: `/library/${library.id}`,
               };
             })
             .filter(
@@ -149,7 +143,7 @@ export function AppSidebar(props: AppSidebarProps) {
           if (!library || typeof library === "number") return null;
           return {
             name: library.name || "Untitled Library",
-            url: `/libraries/${library.id}`,
+            url: `/library/${library.id}`,
             icon: SquareLibrary,
           };
         })
