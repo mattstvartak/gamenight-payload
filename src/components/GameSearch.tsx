@@ -489,14 +489,14 @@ export function GameSearch() {
   );
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.trim();
+    const value = e.target.value;
     setSearchQuery(value);
 
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
 
-    if (value) {
+    if (value.trim()) {
       searchTimeout.current = setTimeout(() => {
         searchGames(value);
       }, SEARCH_DEBOUNCE);

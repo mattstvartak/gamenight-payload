@@ -172,7 +172,10 @@ export async function GET(req: Request) {
     );
 
     if (!createResponse.ok) {
-      throw new Error("Failed to create game in database");
+      const errorData = await createResponse.json();
+      throw new Error(
+        errorData.error || errorData.details || "Failed to create game in database"
+      );
     }
 
     // Return the BGG data immediately while the game is being created
