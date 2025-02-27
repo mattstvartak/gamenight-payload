@@ -63,6 +63,8 @@ async function fetchImageAsFile(
 }
 
 export async function POST(req: Request) {
+  let bggId: string | undefined;
+  
   try {
     const payload = await getPayload({
       config,
@@ -75,11 +77,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
-    const { bggId, gameDetails } = body as {
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
+
+    const { bggId: gameBggId, gameDetails } = body as {
       bggId: string;
       gameDetails: BGGGameDetails;
     };
+    bggId = gameBggId;
 
     if (!bggId || !gameDetails) {
       return NextResponse.json(
@@ -89,18 +101,25 @@ export async function POST(req: Request) {
     }
 
     // Check if game already exists in Payload using unauthenticated access
-    const existingGame = await payload.find({
-      collection: "games",
-      where: {
-        bggId: {
-          equals: bggId,
+    try {
+      const existingGame = await payload.find({
+        collection: "games",
+        where: {
+          bggId: {
+            equals: bggId,
+          },
         },
-      },
-      user: null, // Explicitly set user to null for unauthenticated access
-    });
+      });
 
-    if (existingGame.docs.length > 0) {
-      return NextResponse.json(existingGame.docs[0]);
+      if (existingGame.docs.length > 0) {
+        return NextResponse.json(existingGame.docs[0]);
+      }
+    } catch (error) {
+      console.error("Error checking for existing game:", error);
+      return NextResponse.json(
+        { error: "Failed to check for existing game" },
+        { status: 500 }
+      );
     }
 
     // Create media entries for all game images
@@ -108,56 +127,65 @@ export async function POST(req: Request) {
 
     // Handle main image
     if (gameDetails.image) {
-      const filename = getFilenameFromUrl(gameDetails.image);
-      const storagePath = createStoragePath(gameDetails.name, filename);
+      try {
+        const filename = getFilenameFromUrl(gameDetails.image);
+        const storagePath = createStoragePath(gameDetails.name, filename);
 
-      // Fetch and convert image to File object
-      const file = await fetchImageAsFile(gameDetails.image, filename);
+        // Fetch and convert image to File object
+        const file = await fetchImageAsFile(gameDetails.image, filename);
 
-      const mainMedia = await payload.create({
-        collection: "media",
-        data: {
-          alt: `${gameDetails.name} main image`,
-          prefix: storagePath.replace(filename, ""),
-          gameId: bggId,
-          gameName: gameDetails.name
-            .replace(/[^a-zA-Z0-9-_]/g, "-")
-            .toLowerCase(),
-        },
-        file,
-        user: null, // Explicitly set user to null for unauthenticated access
-      });
-      imageIds.push({ image: mainMedia.id });
+        const mainMedia = await payload.create({
+          collection: "media",
+          data: {
+            alt: `${gameDetails.name} main image`,
+            prefix: storagePath.replace(filename, ""),
+            gameId: bggId,
+            gameName: gameDetails.name
+              .replace(/[^a-zA-Z0-9-_]/g, "-")
+              .toLowerCase(),
+          },
+          file,
+        });
+        imageIds.push({ image: mainMedia.id });
+      } catch (error) {
+        console.error("Error creating main image:", error);
+        // Continue without the image rather than failing the whole request
+      }
     }
 
     // Handle additional images
     if (gameDetails.images?.length) {
       const additionalImagePromises = gameDetails.images.map(
         async (imageUrl) => {
-          const filename = getFilenameFromUrl(imageUrl);
-          const storagePath = createStoragePath(gameDetails.name, filename);
+          try {
+            const filename = getFilenameFromUrl(imageUrl);
+            const storagePath = createStoragePath(gameDetails.name, filename);
 
-          // Fetch and convert image to File object
-          const file = await fetchImageAsFile(imageUrl, filename);
+            // Fetch and convert image to File object
+            const file = await fetchImageAsFile(imageUrl, filename);
 
-          const media = await payload.create({
-            collection: "media",
-            data: {
-              alt: `${gameDetails.name} additional image`,
-              prefix: storagePath.replace(filename, ""),
-              gameId: bggId,
-              gameName: gameDetails.name
-                .replace(/[^a-zA-Z0-9-_]/g, "-")
-                .toLowerCase(),
-            },
-            file,
-            user: null, // Explicitly set user to null for unauthenticated access
-          });
-          return { image: media.id };
+            const media = await payload.create({
+              collection: "media",
+              data: {
+                alt: `${gameDetails.name} additional image`,
+                prefix: storagePath.replace(filename, ""),
+                gameId: bggId,
+                gameName: gameDetails.name
+                  .replace(/[^a-zA-Z0-9-_]/g, "-")
+                  .toLowerCase(),
+              },
+              file,
+            });
+            return { image: media.id };
+          } catch (error) {
+            console.error("Error creating additional image:", error);
+            return null;
+          }
         }
       );
 
-      const additionalImageIds = await Promise.all(additionalImagePromises);
+      const additionalImageIds = (await Promise.all(additionalImagePromises))
+        .filter((id): id is { image: number } => id !== null);
       imageIds.push(...additionalImageIds);
     }
 
@@ -172,7 +200,6 @@ export async function POST(req: Request) {
                 equals: categoryName,
               },
             },
-            user: null, // Explicitly set user to null for unauthenticated access
           });
 
           if (existingCategory.docs.length > 0) {
@@ -182,7 +209,6 @@ export async function POST(req: Request) {
           const newCategory = await payload.create({
             collection: "categories",
             data: { name: categoryName },
-            user: null, // Explicitly set user to null for unauthenticated access
           });
           return newCategory.id;
         } catch (error) {
@@ -206,7 +232,6 @@ export async function POST(req: Request) {
                 equals: mechanicName,
               },
             },
-            user: null, // Explicitly set user to null for unauthenticated access
           });
 
           if (existingMechanic.docs.length > 0) {
@@ -216,7 +241,6 @@ export async function POST(req: Request) {
           const newMechanic = await payload.create({
             collection: "mechanics",
             data: { name: mechanicName },
-            user: null, // Explicitly set user to null for unauthenticated access
           });
           return newMechanic.id;
         } catch (error) {
@@ -229,39 +253,63 @@ export async function POST(req: Request) {
       })
     );
 
-    // Create the game using Payload
-    const game = await payload.create({
-      collection: "games",
-      data: {
-        bggId,
-        name: gameDetails.name,
-        description: gameDetails.description,
-        type: "boardgame",
-        yearPublished: gameDetails.yearPublished
-          ? Number(gameDetails.yearPublished)
-          : undefined,
-        minPlayers: gameDetails.minPlayers,
-        maxPlayers: gameDetails.maxPlayers,
-        minPlaytime: gameDetails.minPlaytime,
-        maxPlaytime: gameDetails.maxPlaytime,
-        minAge: gameDetails.minAge,
-        complexity: gameDetails.weight,
-        categories: categoryIds
-          .filter((id): id is number => id !== null)
-          .map((id) => ({ category: id })),
-        mechanics: mechanicIds
-          .filter((id): id is number => id !== null)
-          .map((id) => ({ mechanic: id })),
-        images: imageIds,
-      },
-      user: null, // Explicitly set user to null for unauthenticated access
-    });
+    try {
+      // Create the game using Payload
+      const game = await payload.create({
+        collection: "games",
+        data: {
+          bggId,
+          name: gameDetails.name,
+          description: gameDetails.description,
+          type: "boardgame",
+          yearPublished: gameDetails.yearPublished
+            ? Number(gameDetails.yearPublished)
+            : undefined,
+          minPlayers: gameDetails.minPlayers,
+          maxPlayers: gameDetails.maxPlayers,
+          minPlaytime: gameDetails.minPlaytime,
+          maxPlaytime: gameDetails.maxPlaytime,
+          minAge: gameDetails.minAge,
+          complexity: gameDetails.weight,
+          categories: categoryIds
+            .filter((id): id is number => id !== null)
+            .map((id) => ({ category: id })),
+          mechanics: mechanicIds
+            .filter((id): id is number => id !== null)
+            .map((id) => ({ mechanic: id })),
+          images: imageIds,
+        },
+      });
 
-    return NextResponse.json(game);
+      return NextResponse.json(game);
+    } catch (error) {
+      console.error("Error creating game:", error);
+      return NextResponse.json(
+        { 
+          error: "Failed to create game",
+          details: error instanceof Error ? error.message : String(error),
+          context: {
+            gameId: bggId,
+            name: gameDetails.name,
+            imageCount: imageIds.length,
+            categoryCount: categoryIds.filter(id => id !== null).length,
+            mechanicCount: mechanicIds.filter(id => id !== null).length
+          }
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error("Error creating game:", error);
+    console.error("Unhandled error:", error);
     return NextResponse.json(
-      { error: "Failed to create game" },
+      { 
+        error: "An unexpected error occurred",
+        details: error instanceof Error ? error.message : String(error),
+        context: {
+          gameId: bggId || 'unknown',
+          step: "outer_try_catch"
+        }
+      },
       { status: 500 }
     );
   }
