@@ -9,12 +9,12 @@ interface SearchResult {
 
 // Keep track of last request times for rate limiting
 const requestTimes: { [key: string]: number } = {};
-const RATE_LIMIT_WINDOW = 2000; // 2 seconds between requests from the same IP
+const RATE_LIMIT_WINDOW = 1000; // Reduce to 1 second between requests
 
 async function fetchWithRetry(
   url: string,
-  retries = 3,
-  delayMs = 1000
+  retries = 2,
+  initialDelayMs = 500
 ): Promise<Response> {
   let lastError: Error | null = null;
 
@@ -24,7 +24,7 @@ async function fetchWithRetry(
 
       // BGG API sometimes returns 202 when the request is accepted but not ready
       if (response.status === 202) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await new Promise((resolve) => setTimeout(resolve, initialDelayMs * (i + 1)));
         continue;
       }
 
@@ -32,12 +32,12 @@ async function fetchWithRetry(
         return response;
       }
 
-      // If we get here, the response wasn't ok
       throw new Error(`HTTP error! status: ${response.status}`);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       if (i === retries - 1) break;
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      // Exponential backoff
+      await new Promise((resolve) => setTimeout(resolve, initialDelayMs * Math.pow(2, i)));
     }
   }
 
@@ -73,9 +73,9 @@ export async function GET(req: Request) {
     const response = await fetchWithRetry(
       `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(
         query
-      )}&type=boardgame,boardgameexpansion`,
-      3,
-      1000
+      )}&type=boardgame,boardgameexpansion&exact=0`,
+      2,
+      500
     );
 
     const text = await response.text();
@@ -102,8 +102,8 @@ export async function GET(req: Request) {
         return id && type && name ? { id, type, name } : null;
       })
       .filter((item): item is SearchResult => item !== null)
-      // Limit to first 50 results to prevent overwhelming the client
-      .slice(0, 50);
+      // Limit to first 25 results for faster loading
+      .slice(0, 25);
 
     return NextResponse.json({ results });
   } catch (error) {
