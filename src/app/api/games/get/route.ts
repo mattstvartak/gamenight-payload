@@ -5,86 +5,116 @@ import { JSDOM } from "jsdom";
 import { getBaseURL } from "@/lib/utils/getBaseURL";
 
 async function fetchBGGGameDetails(bggId: string) {
-  const response = await fetch(
-    `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`
-  );
-  const text = await response.text();
-  const dom = new JSDOM(text, { contentType: "text/xml" });
-  const xmlDoc = dom.window.document;
-  const item = xmlDoc.querySelector("item");
+  const maxRetries = 3;
+  const delayMs = 2000; // 2 seconds delay between retries
 
-  if (!item) {
-    throw new Error("Game not found on BoardGameGeek");
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(
+        `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`
+      );
+
+      const text = await response.text();
+
+      // Check if the response is HTML (error page) instead of XML
+      if (text.trim().toLowerCase().startsWith("<!doctype")) {
+        if (attempt === maxRetries) {
+          throw new Error("BoardGameGeek API is temporarily unavailable");
+        }
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      const dom = new JSDOM(text, { contentType: "text/xml" });
+      const xmlDoc = dom.window.document;
+      const item = xmlDoc.querySelector("item");
+
+      if (!item) {
+        throw new Error("Game not found on BoardGameGeek");
+      }
+
+      const nameElement = item.querySelector('name[type="primary"]');
+      const description = item.querySelector("description")?.textContent;
+      const yearPublished = item
+        .querySelector("yearpublished")
+        ?.getAttribute("value");
+      const thumbnail = item.querySelector("thumbnail")?.textContent;
+      const image = item.querySelector("image")?.textContent;
+      const minPlayers = Number(
+        item.querySelector("minplayers")?.getAttribute("value")
+      );
+      const maxPlayers = Number(
+        item.querySelector("maxplayers")?.getAttribute("value")
+      );
+      const minPlaytime = Number(
+        item.querySelector("minplaytime")?.getAttribute("value")
+      );
+      const maxPlaytime = Number(
+        item.querySelector("maxplaytime")?.getAttribute("value")
+      );
+      const minAge = Number(
+        item.querySelector("minage")?.getAttribute("value")
+      );
+      const rating = Number(
+        item
+          .querySelector("statistics > ratings > average")
+          ?.getAttribute("value")
+      );
+      const weight = Number(
+        item
+          .querySelector("statistics > ratings > averageweight")
+          ?.getAttribute("value")
+      );
+
+      const categories = Array.from(
+        item.querySelectorAll(
+          'link[type="boardgamecategory"]'
+        ) as NodeListOf<Element>
+      ).map((el) => el.getAttribute("value") || "");
+      const mechanics = Array.from(
+        item.querySelectorAll(
+          'link[type="boardgamemechanic"]'
+        ) as NodeListOf<Element>
+      ).map((el) => el.getAttribute("value") || "");
+      const designers = Array.from(
+        item.querySelectorAll(
+          'link[type="boardgamedesigner"]'
+        ) as NodeListOf<Element>
+      ).map((el) => el.getAttribute("value") || "");
+      const publishers = Array.from(
+        item.querySelectorAll(
+          'link[type="boardgamepublisher"]'
+        ) as NodeListOf<Element>
+      ).map((el) => el.getAttribute("value") || "");
+
+      return {
+        name: nameElement?.getAttribute("value") || "",
+        description: description || undefined,
+        yearPublished: yearPublished || undefined,
+        thumbnail: thumbnail || undefined,
+        image: image || undefined,
+        minPlayers: minPlayers || undefined,
+        maxPlayers: maxPlayers || undefined,
+        minPlaytime: minPlaytime || undefined,
+        maxPlaytime: maxPlaytime || undefined,
+        minAge: minAge || undefined,
+        rating: rating || undefined,
+        weight: weight || undefined,
+        categories,
+        mechanics,
+        designers,
+        publishers,
+      };
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      // Wait before retrying
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
-
-  const nameElement = item.querySelector('name[type="primary"]');
-  const description = item.querySelector("description")?.textContent;
-  const yearPublished = item
-    .querySelector("yearpublished")
-    ?.getAttribute("value");
-  const thumbnail = item.querySelector("thumbnail")?.textContent;
-  const image = item.querySelector("image")?.textContent;
-  const minPlayers = Number(
-    item.querySelector("minplayers")?.getAttribute("value")
-  );
-  const maxPlayers = Number(
-    item.querySelector("maxplayers")?.getAttribute("value")
-  );
-  const minPlaytime = Number(
-    item.querySelector("minplaytime")?.getAttribute("value")
-  );
-  const maxPlaytime = Number(
-    item.querySelector("maxplaytime")?.getAttribute("value")
-  );
-  const minAge = Number(item.querySelector("minage")?.getAttribute("value"));
-  const rating = Number(
-    item.querySelector("statistics > ratings > average")?.getAttribute("value")
-  );
-  const weight = Number(
-    item
-      .querySelector("statistics > ratings > averageweight")
-      ?.getAttribute("value")
-  );
-
-  const categories = Array.from(
-    item.querySelectorAll(
-      'link[type="boardgamecategory"]'
-    ) as NodeListOf<Element>
-  ).map((el) => el.getAttribute("value") || "");
-  const mechanics = Array.from(
-    item.querySelectorAll(
-      'link[type="boardgamemechanic"]'
-    ) as NodeListOf<Element>
-  ).map((el) => el.getAttribute("value") || "");
-  const designers = Array.from(
-    item.querySelectorAll(
-      'link[type="boardgamedesigner"]'
-    ) as NodeListOf<Element>
-  ).map((el) => el.getAttribute("value") || "");
-  const publishers = Array.from(
-    item.querySelectorAll(
-      'link[type="boardgamepublisher"]'
-    ) as NodeListOf<Element>
-  ).map((el) => el.getAttribute("value") || "");
-
-  return {
-    name: nameElement?.getAttribute("value") || "",
-    description: description || undefined,
-    yearPublished: yearPublished || undefined,
-    thumbnail: thumbnail || undefined,
-    image: image || undefined,
-    minPlayers: minPlayers || undefined,
-    maxPlayers: maxPlayers || undefined,
-    minPlaytime: minPlaytime || undefined,
-    maxPlaytime: maxPlaytime || undefined,
-    minAge: minAge || undefined,
-    rating: rating || undefined,
-    weight: weight || undefined,
-    categories,
-    mechanics,
-    designers,
-    publishers,
-  };
+  throw new Error("Failed to fetch game details after all retries");
 }
 
 export async function GET(req: Request) {
@@ -157,24 +187,23 @@ export async function GET(req: Request) {
     const bggGame = await fetchBGGGameDetails(bggId);
 
     // Create the game using the create endpoint
-    const createResponse = await fetch(
-      `${getBaseURL()}/api/games/create`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bggId,
-          gameDetails: bggGame,
-        }),
-      }
-    );
+    const createResponse = await fetch(`${getBaseURL()}/api/games/create`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        bggId,
+        gameDetails: bggGame,
+      }),
+    });
 
     if (!createResponse.ok) {
       const errorData = await createResponse.json();
       throw new Error(
-        errorData.error || errorData.details || "Failed to create game in database"
+        errorData.error ||
+          errorData.details ||
+          "Failed to create game in database"
       );
     }
 
