@@ -39,12 +39,12 @@ export function NavLibraries({
   const { isMobile } = useSidebar();
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+    <SidebarGroup>
       <SidebarGroupLabel>Game Libraries</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild tooltip={item.name}>
               <a href={item.url}>
                 <item.icon />
                 <span>{item.name}</span>
@@ -80,7 +80,10 @@ export function NavLibraries({
           </SidebarMenuItem>
         ))}
         <SidebarMenuItem>
-          <SidebarMenuButton className="text-sidebar-foreground/70">
+          <SidebarMenuButton
+            className="text-sidebar-foreground/70"
+            tooltip="New"
+          >
             <Plus className="text-sidebar-foreground/70" />
             <span>New</span>
           </SidebarMenuButton>
