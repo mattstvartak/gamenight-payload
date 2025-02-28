@@ -71,15 +71,9 @@ export const Users: CollectionConfig = {
     },
     {
       name: "libraries",
-      type: "array",
-      fields: [
-        {
-          name: "library",
-          type: "relationship",
-          relationTo: "library",
-          hasMany: true,
-        },
-      ],
+      type: "join",
+      collection: "library",
+      on: "createdBy",
     },
     {
       name: "gameNights",

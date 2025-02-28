@@ -78,7 +78,11 @@ export interface Config {
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
   };
-  collectionsJoins: {};
+  collectionsJoins: {
+    users: {
+      libraries: 'library';
+    };
+  };
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
@@ -135,12 +139,10 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   phone?: number | null;
-  libraries?:
-    | {
-        library?: (number | Library)[] | null;
-        id?: string | null;
-      }[]
-    | null;
+  libraries?: {
+    docs?: (number | Library)[] | null;
+    hasNextPage?: boolean | null;
+  } | null;
   gameNights?:
     | {
         'game night'?: (number | Gamenight)[] | null;
@@ -179,9 +181,10 @@ export interface Library {
   id: number;
   name?: string | null;
   description?: string | null;
+  createdBy?: (number | null) | User;
   games?:
     | {
-        game?: (number | null) | Game;
+        game?: (number | Game)[] | null;
         id?: string | null;
       }[]
     | null;
@@ -449,12 +452,7 @@ export interface UsersSelect<T extends boolean = true> {
   firstName?: T;
   lastName?: T;
   phone?: T;
-  libraries?:
-    | T
-    | {
-        library?: T;
-        id?: T;
-      };
+  libraries?: T;
   gameNights?:
     | T
     | {
@@ -536,6 +534,7 @@ export interface MediaSelect<T extends boolean = true> {
 export interface LibrarySelect<T extends boolean = true> {
   name?: T;
   description?: T;
+  createdBy?: T;
   games?:
     | T
     | {

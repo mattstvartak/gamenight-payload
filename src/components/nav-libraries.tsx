@@ -2,12 +2,11 @@
 
 import {
   Eye,
-  Folder,
   Forward,
   MoreHorizontal,
   Plus,
+  SquareLibrary,
   Trash2,
-  type LucideIcon,
 } from "lucide-react";
 
 import {
@@ -27,30 +26,59 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { LibraryDialog } from "./library-dialog";
-
+import qs from "qs";
 export function NavLibraries({
   items,
   userId,
 }: {
   items: {
-    name: string;
+    title: string;
     url: string;
-    icon: LucideIcon;
+    id: string;
   }[];
   userId: number;
 }) {
   const { isMobile } = useSidebar();
+
+  const deleteLibrary = async (libraryId: string) => {
+    const query = qs.stringify(
+      {
+        where: {
+          id: {
+            equals: libraryId,
+          },
+        },
+      },
+      { addQueryPrefix: true }
+    );
+
+    try {
+      const res = await fetch(`/api/library/${query}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (res.ok) {
+        console.log("Library deleted");
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Game Libraries</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
-          <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton asChild tooltip={item.name}>
+          <SidebarMenuItem key={item.title}>
+            <SidebarMenuButton asChild tooltip={item.title}>
               <a href={item.url}>
-                <item.icon />
-                <span>{item.name}</span>
+                <SquareLibrary />
+                <span>{item.title}</span>
               </a>
             </SidebarMenuButton>
             <DropdownMenu>
@@ -74,7 +102,7 @@ export function NavLibraries({
                   <span>Share</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => deleteLibrary(item.id)}>
                   <Trash2 className="text-muted-foreground" />
                   <span>Delete</span>
                 </DropdownMenuItem>

@@ -42,6 +42,12 @@ export const Library: CollectionConfig = {
       type: "text",
     },
     {
+      name: "createdBy",
+      type: "relationship",
+      relationTo: "users",
+      hasMany: false,
+    },
+    {
       name: "games",
       type: "array",
       fields: [

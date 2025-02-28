@@ -54,25 +54,6 @@ export async function AppSidebar(props: AppSidebarProps) {
     ],
     navMain: [
       {
-        title: "Libraries",
-        url: "#",
-        icon: SquareLibrary,
-        isActive: true,
-        items:
-          user?.libraries
-            ?.map((lib) => {
-              const library = lib.library;
-              if (!library || typeof library === "number") return null;
-              return {
-                title: library.name || "Untitled Library",
-                url: `/library/${library.id}`,
-              };
-            })
-            .filter(
-              (item): item is { title: string; url: string } => item !== null
-            ) || [],
-      },
-      {
         title: "Models",
         url: "#",
         icon: Bot,
@@ -138,24 +119,25 @@ export async function AppSidebar(props: AppSidebarProps) {
         ],
       },
     ],
-    projects:
-      user?.libraries
+    libraries:
+      user?.libraries?.docs
         ?.map((lib) => {
-          const library = lib.library;
-          if (!library || typeof library === "number") return null;
+          const library = lib;
+          if (typeof library === "number") return null;
+
           return {
-            name: library.name || "Untitled Library",
+            title: library.name || "Untitled Library",
             url: `/library/${library.id}`,
-            icon: SquareLibrary,
+            id: library.id.toString(),
           };
         })
         .filter(
-          (item): item is { name: string; url: string; icon: LucideIcon } =>
+          (item): item is { title: string; url: string; id: string } =>
             item !== null
         ) || [],
   };
 
-  console.log(user);
+  console.log(data.libraries);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -173,9 +155,9 @@ export async function AppSidebar(props: AppSidebarProps) {
             <SidebarSeparator className="mx-0 hide-on-collapsed" />
             {/* <NavMain items={data.navMain} />
         <SidebarSeparator className="mx-0" /> */}
-            <NavLibraries items={data.projects} userId={user.id} />
+            <NavLibraries items={data.libraries} userId={user.id} />
             <SidebarSeparator className="mx-0" />
-            <NavFriends items={data.projects} />
+            {/* <NavFriends items={data.projects} /> */}
           </>
         )}
       </SidebarContent>
