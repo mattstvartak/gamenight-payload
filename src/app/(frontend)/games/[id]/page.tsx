@@ -84,7 +84,7 @@ interface Library {
 interface User {
   id: string;
   email: string;
-  libraries?: { library: Library }[];
+  library?: { library: Library }[];
 }
 
 // Helper function to delay execution
@@ -411,7 +411,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
                   }
                 >
                   <AddToLibraryDropdown
-                    libraries={user?.libraries || []}
+                    library={user?.library || []}
                     gameId={game.bggId}
                   />
                 </AuthGuard>

@@ -1,5 +1,3 @@
-"use client";
-
 import * as React from "react";
 import {
   AudioWaveform,
@@ -25,12 +23,16 @@ import {
 import { NavFriends } from "./nav-friends";
 import Image from "next/image";
 import { NavCalendar } from "./nav-calendar";
-import { useUser } from "@/contexts/user-context";
+import { getPayload } from "payload";
+import config from "@payload-config";
+import { headers as nextHeaders } from "next/headers";
+
+const payload = await getPayload({ config });
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
 
-export function AppSidebar(props: AppSidebarProps) {
-  const { user } = useUser();
+export async function AppSidebar(props: AppSidebarProps) {
+  const { user } = await payload.auth({ headers: await nextHeaders() });
 
   const data = {
     teams: [
@@ -153,7 +155,8 @@ export function AppSidebar(props: AppSidebarProps) {
         ) || [],
   };
 
-  console.log("user", user);
+  console.log(user);
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -170,7 +173,7 @@ export function AppSidebar(props: AppSidebarProps) {
             <SidebarSeparator className="mx-0 hide-on-collapsed" />
             {/* <NavMain items={data.navMain} />
         <SidebarSeparator className="mx-0" /> */}
-            <NavLibraries items={data.projects} />
+            <NavLibraries items={data.projects} userId={user.id} />
             <SidebarSeparator className="mx-0" />
             <NavFriends items={data.projects} />
           </>

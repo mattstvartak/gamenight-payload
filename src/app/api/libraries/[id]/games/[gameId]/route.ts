@@ -12,7 +12,7 @@ export async function DELETE(
 
     // Get the library
     const library = await payload.findByID({
-      collection: "libraries",
+      collection: "library",
       id: params.id,
     });
 
@@ -31,7 +31,7 @@ export async function DELETE(
 
     // Update the library
     await payload.update({
-      collection: "libraries",
+      collection: "library",
       id: params.id,
       data: {
         games: updatedGames,

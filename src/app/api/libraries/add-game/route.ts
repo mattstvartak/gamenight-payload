@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     // Get the library
     const library = await payload.findByID({
-      collection: "libraries",
+      collection: "library",
       id: libraryId,
     });
 
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
     // Add the game to the library
     const updatedLibrary = await payload.update({
-      collection: "libraries",
+      collection: "library",
       id: libraryId,
       data: {
         games: [

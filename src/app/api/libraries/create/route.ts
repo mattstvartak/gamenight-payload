@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
     // Create the library
     const library = await payload.create({
-      collection: "libraries",
+      collection: "library",
       data: {
         name,
         description,
@@ -38,13 +38,13 @@ export async function POST(req: Request) {
       },
     });
 
-    // Add the library to the user's libraries
+    // Add the library to the user's library
     await payload.update({
       collection: "users",
       id: user.id,
       data: {
-        libraries: [
-          ...(user.libraries || []),
+        library: [
+          ...(user.library || []),
           {
             library: library.id,
           },

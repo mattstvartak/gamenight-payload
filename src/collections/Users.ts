@@ -76,7 +76,8 @@ export const Users: CollectionConfig = {
         {
           name: "library",
           type: "relationship",
-          relationTo: "libraries",
+          relationTo: "library",
+          hasMany: true,
         },
       ],
     },
@@ -88,6 +89,7 @@ export const Users: CollectionConfig = {
           name: "game night",
           type: "relationship",
           relationTo: "gamenights",
+          hasMany: true,
         },
       ],
     },

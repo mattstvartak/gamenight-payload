@@ -4,8 +4,8 @@ import { admins } from "./access/admins";
 import { anyone } from "./access/anyone";
 import { checkRole } from "./access/checkRole";
 
-export const Libraries: CollectionConfig = {
-  slug: "libraries",
+export const Library: CollectionConfig = {
+  slug: "library",
   admin: {
     useAsTitle: "name",
     group: "Content",
@@ -13,7 +13,7 @@ export const Libraries: CollectionConfig = {
   hooks: {
     beforeChange: [
       ({ req, operation, data }) => {
-        if (operation === 'create') {
+        if (operation === "create") {
           if (req.user) {
             data.createdBy = req.user.id;
             return data;
@@ -29,7 +29,7 @@ export const Libraries: CollectionConfig = {
     delete: admins,
     admin: ({ req: { user } }) => {
       if (!user) return false;
-      return checkRole(['admin'], user);
+      return checkRole(["admin"], user);
     },
   },
   fields: [
@@ -49,8 +49,9 @@ export const Libraries: CollectionConfig = {
           name: "game",
           type: "relationship",
           relationTo: "games",
-        }
-      ]
-    }
+          hasMany: true,
+        },
+      ],
+    },
   ],
 };

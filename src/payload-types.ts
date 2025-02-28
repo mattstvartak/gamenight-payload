@@ -68,7 +68,7 @@ export interface Config {
   collections: {
     users: User;
     media: Media;
-    libraries: Library;
+    library: Library;
     notes: Note;
     gamenights: Gamenight;
     games: Game;
@@ -82,7 +82,7 @@ export interface Config {
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
-    libraries: LibrariesSelect<false> | LibrariesSelect<true>;
+    library: LibrarySelect<false> | LibrarySelect<true>;
     notes: NotesSelect<false> | NotesSelect<true>;
     gamenights: GamenightsSelect<false> | GamenightsSelect<true>;
     games: GamesSelect<false> | GamesSelect<true>;
@@ -137,13 +137,13 @@ export interface User {
   phone?: number | null;
   libraries?:
     | {
-        library?: (number | null) | Library;
+        library?: (number | Library)[] | null;
         id?: string | null;
       }[]
     | null;
   gameNights?:
     | {
-        'game night'?: (number | null) | Gamenight;
+        'game night'?: (number | Gamenight)[] | null;
         id?: string | null;
       }[]
     | null;
@@ -173,7 +173,7 @@ export interface User {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "libraries".
+ * via the `definition` "library".
  */
 export interface Library {
   id: number;
@@ -374,7 +374,7 @@ export interface PayloadLockedDocument {
         value: number | Media;
       } | null)
     | ({
-        relationTo: 'libraries';
+        relationTo: 'library';
         value: number | Library;
       } | null)
     | ({
@@ -531,9 +531,9 @@ export interface MediaSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "libraries_select".
+ * via the `definition` "library_select".
  */
-export interface LibrariesSelect<T extends boolean = true> {
+export interface LibrarySelect<T extends boolean = true> {
   name?: T;
   description?: T;
   games?:

@@ -26,15 +26,18 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { LibraryDialog } from "./library-dialog";
 
 export function NavLibraries({
   items,
+  userId,
 }: {
   items: {
     name: string;
     url: string;
     icon: LucideIcon;
   }[];
+  userId: number;
 }) {
   const { isMobile } = useSidebar();
 
@@ -80,13 +83,18 @@ export function NavLibraries({
           </SidebarMenuItem>
         ))}
         <SidebarMenuItem>
-          <SidebarMenuButton
-            className="text-sidebar-foreground/70"
-            tooltip="New"
-          >
-            <Plus className="text-sidebar-foreground/70" />
-            <span>New</span>
-          </SidebarMenuButton>
+          <LibraryDialog
+            userId={userId}
+            trigger={
+              <SidebarMenuButton
+                className="text-sidebar-foreground/70"
+                tooltip="New"
+              >
+                <Plus className="text-sidebar-foreground/70" />
+                <span>New</span>
+              </SidebarMenuButton>
+            }
+          />
         </SidebarMenuItem>
       </SidebarMenu>
     </SidebarGroup>

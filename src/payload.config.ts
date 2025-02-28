@@ -6,12 +6,11 @@ import { lexicalEditor } from "@payloadcms/richtext-lexical";
 import path from "path";
 import { buildConfig } from "payload";
 import { fileURLToPath } from "url";
-import { readFileSync } from "fs";
 import sharp from "sharp";
 
 import { Users } from "./collections/Users";
 import { Media } from "./collections/Media";
-import { Libraries } from "./collections/Libraries";
+import { Library } from "./collections/Library";
 import { Notes } from "./collections/Notes";
 import { GameNights } from "./collections/GameNights";
 import { Games } from "./collections/Games";
@@ -32,7 +31,7 @@ export default buildConfig({
   collections: [
     Users,
     Media,
-    Libraries,
+    Library,
     Notes,
     GameNights,
     Games,
