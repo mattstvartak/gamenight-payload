@@ -47,6 +47,7 @@ export function LoginDialog({ trigger, open, onOpenChange }: LoginDialogProps) {
     hasNumber: false,
     hasSpecialChar: false,
   });
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   const router = useRouter();
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,23 +105,9 @@ export function LoginDialog({ trigger, open, onOpenChange }: LoginDialogProps) {
           throw new Error(errorData.error || "Failed to create account");
         }
 
-        const loginResponse = await fetch("/api/users/login", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email,
-            password,
-          }),
-        });
-
-        if (loginResponse.ok) {
-          if (onOpenChange) onOpenChange(false);
-          router.refresh();
-        } else {
-          throw new Error("Login failed after account creation");
-        }
+        setShowVerificationMessage(true);
+        setIsLoading(false);
+        return;
       } else {
         const loginResponse = await fetch("/api/users/login", {
           method: "POST",
@@ -137,7 +124,16 @@ export function LoginDialog({ trigger, open, onOpenChange }: LoginDialogProps) {
           if (onOpenChange) onOpenChange(false);
           router.refresh();
         } else {
-          throw new Error("Login failed");
+          const errorData = await loginResponse.json();
+
+          if (loginResponse.status === 403) {
+            setErrors((prev) => ({
+              ...prev,
+              submit: errorData.error,
+            }));
+          } else {
+            throw new Error(errorData.error || "Login failed");
+          }
         }
       }
     } catch (error) {
@@ -177,163 +173,195 @@ export function LoginDialog({ trigger, open, onOpenChange }: LoginDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4" name="login">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email address</Label>
-            <div className="relative">
+        {showVerificationMessage ? (
+          <div className="space-y-4 text-center py-4">
+            <h3 className="text-lg font-semibold text-green-600">
+              Account Created Successfully!
+            </h3>
+            <p className="text-sm text-gray-600">
+              We&apos;ve sent a verification email to{" "}
+              <span className="font-medium">{email}</span>. Please check your
+              inbox and click the verification link to complete your
+              registration.
+            </p>
+            <p className="text-xs text-gray-500">
+              Don&apos;t see the email? Check your spam folder or try again in a
+              few minutes.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowVerificationMessage(false);
+                setIsNewUser(false);
+                setEmail("");
+                setPassword("");
+                setUsername("");
+                setConfirmPassword("");
+              }}
+            >
+              Back to Sign In
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4" name="login">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email address</Label>
+              <div className="relative">
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={handleEmailChange}
+                  onBlur={handleEmailBlur}
+                  className={errors.email ? "border-red-500" : ""}
+                  autoComplete={isNewUser ? "email" : "username"}
+                />
+              </div>
+              {errors.email && (
+                <p className="text-sm text-red-500">{errors.email}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
               <Input
-                id="email"
-                name="email"
-                type="email"
+                id="password"
+                name="password"
+                type="password"
                 required
-                value={email}
-                onChange={handleEmailChange}
-                onBlur={handleEmailBlur}
-                className={errors.email ? "border-red-500" : ""}
-                autoComplete={isNewUser ? "email" : "username"}
+                value={password}
+                onChange={handlePasswordChange}
+                onFocus={() => isNewUser && setShowPasswordRequirements(true)}
+                className={errors.password ? "border-red-500" : ""}
+                autoComplete={isNewUser ? "new-password" : "current-password"}
               />
-            </div>
-            {errors.email && (
-              <p className="text-sm text-red-500">{errors.email}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              required
-              value={password}
-              onChange={handlePasswordChange}
-              onFocus={() => isNewUser && setShowPasswordRequirements(true)}
-              className={errors.password ? "border-red-500" : ""}
-              autoComplete={isNewUser ? "new-password" : "current-password"}
-            />
-            {isNewUser && (showPasswordRequirements || errors.password) && (
-              <div className="text-sm space-y-2 new-user-field">
-                <p className="font-medium text-muted-foreground">
-                  Password Requirements:
-                </p>
-                <ul className="space-y-1">
-                  <li
-                    className={`flex items-center ${passwordValidation.hasMinLength ? "text-green-500" : "text-red-500"}`}
-                  >
-                    <span className="mr-2">
-                      {passwordValidation.hasMinLength ? "✓" : "•"}
-                    </span>
-                    At least 8 characters long
-                  </li>
-                  <li
-                    className={`flex items-center ${passwordValidation.hasUpperCase ? "text-green-500" : "text-red-500"}`}
-                  >
-                    <span className="mr-2">
-                      {passwordValidation.hasUpperCase ? "✓" : "•"}
-                    </span>
-                    Contains at least one uppercase letter
-                  </li>
-                  <li
-                    className={`flex items-center ${passwordValidation.hasLowerCase ? "text-green-500" : "text-red-500"}`}
-                  >
-                    <span className="mr-2">
-                      {passwordValidation.hasLowerCase ? "✓" : "•"}
-                    </span>
-                    Contains at least one lowercase letter
-                  </li>
-                  <li
-                    className={`flex items-center ${passwordValidation.hasNumber ? "text-green-500" : "text-red-500"}`}
-                  >
-                    <span className="mr-2">
-                      {passwordValidation.hasNumber ? "✓" : "•"}
-                    </span>
-                    Contains at least one number
-                  </li>
-                  <li
-                    className={`flex items-center ${passwordValidation.hasSpecialChar ? "text-green-500" : "text-red-500"}`}
-                  >
-                    <span className="mr-2">
-                      {passwordValidation.hasSpecialChar ? "✓" : "•"}
-                    </span>
-                    Contains at least one special character
-                  </li>
-                </ul>
-              </div>
-            )}
-            {errors.password && (
-              <p className="text-sm text-red-500">{errors.password}</p>
-            )}
-          </div>
-
-          {isNewUser && (
-            <>
-              <div className="space-y-2 new-user-field">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={errors.confirmPassword ? "border-red-500" : ""}
-                  autoComplete="new-password"
-                />
-                {errors.confirmPassword && (
-                  <p className="text-sm text-red-500">
-                    {errors.confirmPassword}
+              {isNewUser && (showPasswordRequirements || errors.password) && (
+                <div className="text-sm space-y-2 new-user-field">
+                  <p className="font-medium text-muted-foreground">
+                    Password Requirements:
                   </p>
-                )}
-              </div>
-
-              <div className="space-y-2 new-user-field">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  name="username"
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className={errors.username ? "border-red-500" : ""}
-                  autoComplete="username"
-                />
-                {errors.username && (
-                  <p className="text-sm text-red-500">{errors.username}</p>
-                )}
-              </div>
-            </>
-          )}
-
-          <DialogFooter>
-            {errors.submit && (
-              <p className="text-sm text-red-500 text-center">
-                {errors.submit}
-              </p>
-            )}
-            <div className="w-full space-y-4">
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading
-                  ? "Please wait..."
-                  : isNewUser
-                    ? "Create Account"
-                    : "Sign In"}
-              </Button>
-              <p className="text-center text-sm">
-                {isNewUser
-                  ? "Already have an account?"
-                  : "Don't have an account?"}{" "}
-                <button
-                  type="button"
-                  onClick={() => setIsNewUser(!isNewUser)}
-                  className="text-primary hover:underline font-medium"
-                >
-                  {isNewUser ? "Sign In" : "Create Account"}
-                </button>
-              </p>
+                  <ul className="space-y-1">
+                    <li
+                      className={`flex items-center ${passwordValidation.hasMinLength ? "text-green-500" : "text-red-500"}`}
+                    >
+                      <span className="mr-2">
+                        {passwordValidation.hasMinLength ? "✓" : "•"}
+                      </span>
+                      At least 8 characters long
+                    </li>
+                    <li
+                      className={`flex items-center ${passwordValidation.hasUpperCase ? "text-green-500" : "text-red-500"}`}
+                    >
+                      <span className="mr-2">
+                        {passwordValidation.hasUpperCase ? "✓" : "•"}
+                      </span>
+                      Contains at least one uppercase letter
+                    </li>
+                    <li
+                      className={`flex items-center ${passwordValidation.hasLowerCase ? "text-green-500" : "text-red-500"}`}
+                    >
+                      <span className="mr-2">
+                        {passwordValidation.hasLowerCase ? "✓" : "•"}
+                      </span>
+                      Contains at least one lowercase letter
+                    </li>
+                    <li
+                      className={`flex items-center ${passwordValidation.hasNumber ? "text-green-500" : "text-red-500"}`}
+                    >
+                      <span className="mr-2">
+                        {passwordValidation.hasNumber ? "✓" : "•"}
+                      </span>
+                      Contains at least one number
+                    </li>
+                    <li
+                      className={`flex items-center ${passwordValidation.hasSpecialChar ? "text-green-500" : "text-red-500"}`}
+                    >
+                      <span className="mr-2">
+                        {passwordValidation.hasSpecialChar ? "✓" : "•"}
+                      </span>
+                      Contains at least one special character
+                    </li>
+                  </ul>
+                </div>
+              )}
+              {errors.password && (
+                <p className="text-sm text-red-500">{errors.password}</p>
+              )}
             </div>
-          </DialogFooter>
-        </form>
+
+            {isNewUser && (
+              <>
+                <div className="space-y-2 new-user-field">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={errors.confirmPassword ? "border-red-500" : ""}
+                    autoComplete="new-password"
+                  />
+                  {errors.confirmPassword && (
+                    <p className="text-sm text-red-500">
+                      {errors.confirmPassword}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2 new-user-field">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    name="username"
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className={errors.username ? "border-red-500" : ""}
+                    autoComplete="username"
+                  />
+                  {errors.username && (
+                    <p className="text-sm text-red-500">{errors.username}</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            <DialogFooter>
+              {errors.submit && (
+                <p className="text-sm text-red-500 text-center">
+                  {errors.submit}
+                </p>
+              )}
+              <div className="w-full space-y-4">
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading
+                    ? "Please wait..."
+                    : isNewUser
+                      ? "Create Account"
+                      : "Sign In"}
+                </Button>
+                <p className="text-center text-sm">
+                  {isNewUser
+                    ? "Already have an account?"
+                    : "Don't have an account?"}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setIsNewUser(!isNewUser)}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    {isNewUser ? "Sign In" : "Create Account"}
+                  </button>
+                </p>
+              </div>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

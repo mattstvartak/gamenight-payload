@@ -11,7 +11,45 @@ export const Users: CollectionConfig = {
   admin: {
     useAsTitle: "email",
   },
-  auth: true,
+  auth: {
+    verify: {
+      generateEmailHTML: ({ token, user }) => {
+        // Create verification URL using your frontend URL
+        const url = `${process.env.NEXT_PUBLIC_SERVER_URL}/verify-email?token=${token}`;
+
+        return `
+          <h1>Verify Your Email</h1>
+          <p>Hello ${user.username || user.email},</p>
+          <p>Please click the link below to verify your email address:</p>
+          <p>
+            <a href="${url}" style="
+              padding: 10px 20px;
+              background-color: #007bff;
+              color: white;
+              text-decoration: none;
+              border-radius: 5px;
+              display: inline-block;
+            ">
+              Verify Email
+            </a>
+          </p>
+          <p>If you didn't request this verification, you can safely ignore this email.</p>
+          <p>This link will expire in 24 hours.</p>
+        `;
+      },
+      generateEmailSubject: ({ user }) => {
+        return `Verify your email for GameNight`;
+      },
+    },
+    maxLoginAttempts: 5,
+    lockTime: 600000, // Lock for 10 minutes
+    useAPIKey: false,
+    cookies: {
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+      domain: process.env.COOKIE_DOMAIN,
+    },
+  },
   access: {
     read: adminsAndUser,
     create: anyone,
@@ -65,6 +103,7 @@ export const Users: CollectionConfig = {
       name: "email",
       type: "email",
       required: true,
+      unique: true,
     },
     {
       name: "phone",

@@ -3,6 +3,7 @@ import { vercelBlobStorage } from "@payloadcms/storage-vercel-blob";
 import { postgresAdapter } from "@payloadcms/db-postgres";
 import { payloadCloudPlugin } from "@payloadcms/payload-cloud";
 import { lexicalEditor } from "@payloadcms/richtext-lexical";
+import { nodemailerAdapter } from "@payloadcms/email-nodemailer";
 import path from "path";
 import { buildConfig } from "payload";
 import { fileURLToPath } from "url";
@@ -28,6 +29,19 @@ export default buildConfig({
       titleSuffix: "- GameNight",
     },
   },
+  email: nodemailerAdapter({
+    defaultFromAddress: "noreply@trial-z3m5jgr3y90gdpyo.mlsender.net",
+    defaultFromName: "GameNight",
+    // Nodemailer transportOptions
+    transportOptions: {
+      host: process.env.SMTP_HOST,
+      port: 587,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    },
+  }),
   collections: [
     Users,
     Media,
