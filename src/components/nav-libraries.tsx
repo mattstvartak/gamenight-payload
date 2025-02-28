@@ -26,22 +26,25 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { LibraryDialog } from "./library-dialog";
-import qs from "qs";
+import { LucideIcon } from "lucide-react";
+import { stringify } from "qs-esm";
+
 export function NavLibraries({
   items,
   userId,
 }: {
   items: {
-    title: string;
+    name: string;
     url: string;
     id: string;
+    icon: LucideIcon;
   }[];
   userId: number;
 }) {
   const { isMobile } = useSidebar();
 
   const deleteLibrary = async (libraryId: string) => {
-    const query = qs.stringify(
+    const query = stringify(
       {
         where: {
           id: {
@@ -53,7 +56,7 @@ export function NavLibraries({
     );
 
     try {
-      const res = await fetch(`/api/library/${query}`, {
+      const res = await fetch(`/api/library${query}`, {
         method: "DELETE",
         credentials: "include",
         headers: {
@@ -74,11 +77,11 @@ export function NavLibraries({
       <SidebarGroupLabel>Game Libraries</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
-          <SidebarMenuItem key={item.title}>
-            <SidebarMenuButton asChild tooltip={item.title}>
+          <SidebarMenuItem key={item.name}>
+            <SidebarMenuButton asChild tooltip={item.name}>
               <a href={item.url}>
-                <SquareLibrary />
-                <span>{item.title}</span>
+                <item.icon />
+                <span>{item.name}</span>
               </a>
             </SidebarMenuButton>
             <DropdownMenu>

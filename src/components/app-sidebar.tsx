@@ -1,15 +1,21 @@
+"use client";
+
 import * as React from "react";
 import {
   AudioWaveform,
   BookOpen,
   Bot,
   Command,
+  Frame,
   GalleryVerticalEnd,
   LucideIcon,
+  Map,
+  PieChart,
   Settings2,
   SquareLibrary,
 } from "lucide-react";
 
+import { NavMain } from "@/components/nav-main";
 import { NavLibraries } from "@/components/nav-libraries";
 import { NavUser } from "@/components/nav-user";
 import {
@@ -21,18 +27,16 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { NavFriends } from "./nav-friends";
+import { User } from "@/payload-types";
 import Image from "next/image";
+import { Calendar } from "@/components/ui/calendar";
 import { NavCalendar } from "./nav-calendar";
-import { getPayload } from "payload";
-import config from "@payload-config";
-import { headers as nextHeaders } from "next/headers";
-
-const payload = await getPayload({ config });
+import { useUser } from "@/contexts/user-context";
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
 
-export async function AppSidebar(props: AppSidebarProps) {
-  const { user } = await payload.auth({ headers: await nextHeaders() });
+export function AppSidebar(props: AppSidebarProps) {
+  const { user } = useUser();
 
   const data = {
     teams: [
@@ -119,25 +123,29 @@ export async function AppSidebar(props: AppSidebarProps) {
         ],
       },
     ],
-    libraries:
+    projects:
       user?.libraries?.docs
         ?.map((lib) => {
           const library = lib;
-          if (typeof library === "number") return null;
-
+          if (!library || typeof library === "number") return null;
           return {
-            title: library.name || "Untitled Library",
+            name: library.name || "Untitled Library",
             url: `/library/${library.id}`,
             id: library.id.toString(),
+            icon: SquareLibrary,
           };
         })
         .filter(
-          (item): item is { title: string; url: string; id: string } =>
-            item !== null
+          (
+            item
+          ): item is {
+            name: string;
+            url: string;
+            icon: LucideIcon;
+            id: string;
+          } => item !== null
         ) || [],
   };
-
-  console.log(data.libraries);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -155,9 +163,9 @@ export async function AppSidebar(props: AppSidebarProps) {
             <SidebarSeparator className="mx-0 hide-on-collapsed" />
             {/* <NavMain items={data.navMain} />
         <SidebarSeparator className="mx-0" /> */}
-            <NavLibraries items={data.libraries} userId={user.id} />
+            <NavLibraries items={data.projects} userId={user.id} />
             <SidebarSeparator className="mx-0" />
-            {/* <NavFriends items={data.projects} /> */}
+            <NavFriends items={data.projects} />
           </>
         )}
       </SidebarContent>

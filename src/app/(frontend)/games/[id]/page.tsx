@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { Loader2, Users, Clock, CalendarDays } from "lucide-react";
+import { Users, Clock, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Carousel,
@@ -11,26 +11,6 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AuthGuard } from "@/components/AuthGuard";
-import { AddToLibraryDropdown } from "@/components/AddToLibraryDropdown";
 
 interface MediaImage {
   id: number;
@@ -196,42 +176,6 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   if (isLoading) {
     return (
       <>
-        <header className="border-b">
-          <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold">Game Night</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              {user ? (
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-muted-foreground">
-                    {user.email}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    asChild
-                    className="cursor-pointer"
-                  >
-                    <a href="/dashboard">Dashboard</a>
-                  </Button>
-                  <form action="/api/users/logout" method="post">
-                    <Button
-                      variant="outline"
-                      type="submit"
-                      className="cursor-pointer"
-                    >
-                      Logout
-                    </Button>
-                  </form>
-                </div>
-              ) : (
-                <Button asChild className="cursor-pointer">
-                  <a href="/login">Login or Create Account</a>
-                </Button>
-              )}
-            </div>
-          </div>
-        </header>
         <div className="container max-w-4xl mx-auto py-8 space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             {/* Image Section Skeleton */}
@@ -275,42 +219,6 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
   if (error || !game) {
     return (
       <>
-        <header className="border-b">
-          <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold">Game Night</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              {user ? (
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-muted-foreground">
-                    {user.email}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    asChild
-                    className="cursor-pointer"
-                  >
-                    <a href="/dashboard">Dashboard</a>
-                  </Button>
-                  <form action="/api/users/logout" method="post">
-                    <Button
-                      variant="outline"
-                      type="submit"
-                      className="cursor-pointer"
-                    >
-                      Logout
-                    </Button>
-                  </form>
-                </div>
-              ) : (
-                <Button asChild className="cursor-pointer">
-                  <a href="/login">Login or Create Account</a>
-                </Button>
-              )}
-            </div>
-          </div>
-        </header>
         <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
           <p className="text-lg font-medium text-destructive">
             {error || "Failed to load game details"}
@@ -325,38 +233,6 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
 
   return (
     <>
-      <header className="border-b">
-        <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold">Game Night</h1>
-          </div>
-          <div className="flex items-center space-x-4">
-            {user ? (
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground">
-                  {user.email}
-                </span>
-                <Button variant="secondary" asChild className="cursor-pointer">
-                  <a href="/dashboard">Dashboard</a>
-                </Button>
-                <form action="/api/users/logout" method="post">
-                  <Button
-                    variant="outline"
-                    type="submit"
-                    className="cursor-pointer"
-                  >
-                    Logout
-                  </Button>
-                </form>
-              </div>
-            ) : (
-              <Button asChild className="cursor-pointer">
-                <a href="/login">Login or Create Account</a>
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
       <div className="container max-w-4xl mx-auto py-8 space-y-6">
         <div className="grid md:grid-cols-2 gap-6">
           {/* Image Section */}
@@ -401,7 +277,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
           {/* Details Card */}
           <Card className="md:col-span-1">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              {/* <div className="flex items-center justify-between">
                 <CardTitle>{game.name}</CardTitle>
                 <AuthGuard
                   fallback={
@@ -415,7 +291,7 @@ export default function GamePage({ params }: { params: Promise<PageParams> }) {
                     gameId={game.bggId}
                   />
                 </AuthGuard>
-              </div>
+              </div> */}
               {game.yearPublished && (
                 <div className="flex items-center gap-1 text-muted-foreground mt-1">
                   <CalendarDays className="h-4 w-4" />

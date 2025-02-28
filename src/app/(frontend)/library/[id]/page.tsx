@@ -1,11 +1,16 @@
 import { LibraryContent } from "@/components/library-content";
+import { use } from "react";
 
-interface LibraryPageProps {
-  params: {
-    id: string;
-  };
+interface PageParams {
+  id: string;
 }
 
-export default function LibraryPage({ params }: LibraryPageProps) {
-  return <LibraryContent libraryId={params.id} />;
+export default function LibraryPage({
+  params,
+}: {
+  params: Promise<PageParams>;
+}) {
+  const { id } = use(params);
+
+  return <LibraryContent libraryId={id} />;
 }

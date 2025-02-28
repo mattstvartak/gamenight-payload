@@ -17,7 +17,7 @@ export const Games: CollectionConfig = {
     delete: admins,
     admin: ({ req: { user } }) => {
       if (!user) return false;
-      return checkRole(['admin'], user);
+      return checkRole(["admin"], user);
     },
   },
   fields: [
@@ -43,6 +43,7 @@ export const Games: CollectionConfig = {
           name: "image",
           type: "upload",
           relationTo: "media",
+          // hasMany: true,
         },
       ],
     },

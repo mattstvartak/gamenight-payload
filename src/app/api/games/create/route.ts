@@ -64,7 +64,7 @@ async function fetchImageAsFile(
 
 export async function POST(req: Request) {
   let bggId: string | undefined;
-  
+
   try {
     const payload = await getPayload({
       config,
@@ -184,8 +184,9 @@ export async function POST(req: Request) {
         }
       );
 
-      const additionalImageIds = (await Promise.all(additionalImagePromises))
-        .filter((id): id is { image: number } => id !== null);
+      const additionalImageIds = (
+        await Promise.all(additionalImagePromises)
+      ).filter((id): id is { image: number } => id !== null);
       imageIds.push(...additionalImageIds);
     }
 
@@ -285,16 +286,16 @@ export async function POST(req: Request) {
     } catch (error) {
       console.error("Error creating game:", error);
       return NextResponse.json(
-        { 
+        {
           error: "Failed to create game",
           details: error instanceof Error ? error.message : String(error),
           context: {
             gameId: bggId,
             name: gameDetails.name,
             imageCount: imageIds.length,
-            categoryCount: categoryIds.filter(id => id !== null).length,
-            mechanicCount: mechanicIds.filter(id => id !== null).length
-          }
+            categoryCount: categoryIds.filter((id) => id !== null).length,
+            mechanicCount: mechanicIds.filter((id) => id !== null).length,
+          },
         },
         { status: 500 }
       );
@@ -302,13 +303,13 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("Unhandled error:", error);
     return NextResponse.json(
-      { 
+      {
         error: "An unexpected error occurred",
         details: error instanceof Error ? error.message : String(error),
         context: {
-          gameId: bggId || 'unknown',
-          step: "outer_try_catch"
-        }
+          gameId: bggId || "unknown",
+          step: "outer_try_catch",
+        },
       },
       { status: 500 }
     );

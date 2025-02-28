@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -8,26 +10,40 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { getPayload } from "payload";
-import config from "@payload-config";
-import { Card, CardHeader, CardContent, CardTitle } from "./ui/card";
+import { Card, CardTitle } from "./ui/card";
 import Image from "next/image";
 import Link from "next/link";
-import { Trash2, Loader2, Users, Clock } from "lucide-react";
-import { Button } from "./ui/button";
-
-const payload = await getPayload({ config });
+import { Users, Clock } from "lucide-react";
+import { redirect } from "next/navigation";
+import { stringify } from "qs-esm";
+import { useEffect, useState } from "react";
+import { Library, Game } from "@/payload-types";
 
 interface LibraryContentProps {
   libraryId: string;
 }
 
-export async function LibraryContent({ libraryId }: LibraryContentProps) {
-  const library = await payload.findByID({
-    collection: "library", // required
-    id: libraryId, // required
-    depth: 2,
-  });
+export function LibraryContent({ libraryId }: LibraryContentProps) {
+  const [library, setLibrary] = useState<Library | null>(null);
+
+  useEffect(() => {
+    const getLibrary = async () => {
+      try {
+        const req = await fetch(`/api/library/${libraryId}`);
+        const data = await req.json();
+        if (req.ok) {
+          setLibrary(data);
+        }
+      } catch (error) {
+        console.error(error);
+        redirect("/");
+      }
+    };
+
+    getLibrary();
+  }, [libraryId]);
+
+  if (!library) return null;
 
   return (
     <>
@@ -56,8 +72,9 @@ export async function LibraryContent({ libraryId }: LibraryContentProps) {
         <h1 className="text-2xl font-bold">{library.name}</h1>
         <div className="grid auto-rows-min gap-4 md:grid-cols-3">
           {library.games?.map((gameEntry) => {
-            const game =
-              typeof gameEntry.game === "object" ? gameEntry.game : null;
+            const game = (
+              typeof gameEntry.game === "object" ? gameEntry.game : null
+            ) as Game | null;
             if (!game) return null;
 
             return (

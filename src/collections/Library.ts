@@ -11,27 +11,27 @@ export const Library: CollectionConfig = {
     group: "Content",
   },
   hooks: {
-    beforeChange: [
-      ({ req, operation, data }) => {
-        if (operation === "create") {
-          if (req.user) {
-            data.createdBy = req.user.id;
-            return data;
-          }
-        }
-      },
-    ],
+    // beforeChange: [
+    //   ({ req, operation, data }) => {
+    //     if (operation === "create") {
+    //       if (req.user) {
+    //         data.createdBy = req.user.id;
+    //         return data;
+    //       }
+    //     }
+    //   },
+    // ],
   },
-  access: {
-    read: adminsAndUser,
-    create: anyone,
-    update: adminsAndUser,
-    delete: admins,
-    admin: ({ req: { user } }) => {
-      if (!user) return false;
-      return checkRole(["admin"], user);
-    },
-  },
+  // access: {
+  //   read: adminsAndUser,
+  //   create: anyone,
+  //   update: adminsAndUser,
+  //   delete: admins,
+  //   admin: ({ req: { user } }) => {
+  //     if (!user) return false;
+  //     return checkRole(["admin"], user);
+  //   },
+  // },
   fields: [
     {
       name: "name",
