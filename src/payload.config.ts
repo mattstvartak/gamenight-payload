@@ -10,7 +10,7 @@ import sharp from "sharp";
 
 import { Users } from "./collections/Users";
 import { Media } from "./collections/Media";
-import { Library } from "./collections/Library";
+import { Libraries } from "./collections/Libraries";
 import { Notes } from "./collections/Notes";
 import { GameNights } from "./collections/GameNights";
 import { Games } from "./collections/Games";
@@ -31,7 +31,7 @@ export default buildConfig({
   collections: [
     Users,
     Media,
-    Library,
+    Libraries,
     Notes,
     GameNights,
     Games,
@@ -45,10 +45,7 @@ export default buildConfig({
   },
   db: postgresAdapter({
     pool: {
-      connectionString: process.env.SUPABASE_URL || "",
-      // ssl: {
-      //   rejectUnauthorized: false
-      // }
+      connectionString: process.env.DATABASE_URI || "",
     },
   }),
   sharp,

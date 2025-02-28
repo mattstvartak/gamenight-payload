@@ -168,15 +168,15 @@ export async function GET(req: Request) {
           categories:
             payloadGame.categories
               ?.map((c) => {
-                if (!c.category || typeof c.category === "number") return "";
-                return c.category.name || "";
+                if (typeof c === "number") return "";
+                return c.name || "";
               })
               .filter((name) => name !== "") || [],
           mechanics:
             payloadGame.mechanics
               ?.map((m) => {
-                if (!m.mechanic || typeof m.mechanic === "number") return "";
-                return m.mechanic.name || "";
+                if (typeof m === "number") return "";
+                return m.name || "";
               })
               .filter((name) => name !== "") || [],
         },

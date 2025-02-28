@@ -68,7 +68,7 @@ export interface Config {
   collections: {
     users: User;
     media: Media;
-    library: Library;
+    libraries: Library;
     notes: Note;
     gamenights: Gamenight;
     games: Game;
@@ -78,15 +78,11 @@ export interface Config {
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
   };
-  collectionsJoins: {
-    users: {
-      libraries: 'library';
-    };
-  };
+  collectionsJoins: {};
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
-    library: LibrarySelect<false> | LibrarySelect<true>;
+    libraries: LibrariesSelect<false> | LibrariesSelect<true>;
     notes: NotesSelect<false> | NotesSelect<true>;
     gamenights: GamenightsSelect<false> | GamenightsSelect<true>;
     games: GamesSelect<false> | GamesSelect<true>;
@@ -139,28 +135,10 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   phone?: number | null;
-  libraries?: {
-    docs?: (number | Library)[] | null;
-    hasNextPage?: boolean | null;
-  } | null;
-  gameNights?:
-    | {
-        'game night'?: (number | Gamenight)[] | null;
-        id?: string | null;
-      }[]
-    | null;
-  friends?:
-    | {
-        friend?: (number | User)[] | null;
-        id?: string | null;
-      }[]
-    | null;
-  notebooks?:
-    | {
-        notes?: (number | Note)[] | null;
-        id?: string | null;
-      }[]
-    | null;
+  libraries?: (number | Library)[] | null;
+  gameNights?: (number | Gamenight)[] | null;
+  friends?: (number | User)[] | null;
+  notes?: (number | Note)[] | null;
   avatar?: (number | null) | Media;
   updatedAt: string;
   createdAt: string;
@@ -175,19 +153,14 @@ export interface User {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "library".
+ * via the `definition` "libraries".
  */
 export interface Library {
   id: number;
   name?: string | null;
   description?: string | null;
   createdBy?: (number | null) | User;
-  games?:
-    | {
-        game?: (number | Game)[] | null;
-        id?: string | null;
-      }[]
-    | null;
+  games?: (number | Game)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -197,7 +170,7 @@ export interface Library {
  */
 export interface Game {
   id: number;
-  bggId?: string | null;
+  bggId?: number | null;
   name?: string | null;
   description?: string | null;
   images?:
@@ -216,18 +189,8 @@ export interface Game {
   minAge?: number | null;
   complexity?: number | null;
   'official link'?: string | null;
-  categories?:
-    | {
-        category?: (number | null) | Category;
-        id?: string | null;
-      }[]
-    | null;
-  mechanics?:
-    | {
-        mechanic?: (number | null) | Mechanic;
-        id?: string | null;
-      }[]
-    | null;
+  categories?: (number | Category)[] | null;
+  mechanics?: (number | Mechanic)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -319,18 +282,8 @@ export interface Gamenight {
    * @maxItems 2
    */
   location?: [number, number] | null;
-  players?:
-    | {
-        player?: (number | null) | User;
-        id?: string | null;
-      }[]
-    | null;
-  games?:
-    | {
-        game?: (number | null) | Game;
-        id?: string | null;
-      }[]
-    | null;
+  players?: (number | User)[] | null;
+  games?: (number | Game)[] | null;
   recurring?: boolean | null;
   updatedAt: string;
   createdAt: string;
@@ -377,7 +330,7 @@ export interface PayloadLockedDocument {
         value: number | Media;
       } | null)
     | ({
-        relationTo: 'library';
+        relationTo: 'libraries';
         value: number | Library;
       } | null)
     | ({
@@ -453,24 +406,9 @@ export interface UsersSelect<T extends boolean = true> {
   lastName?: T;
   phone?: T;
   libraries?: T;
-  gameNights?:
-    | T
-    | {
-        'game night'?: T;
-        id?: T;
-      };
-  friends?:
-    | T
-    | {
-        friend?: T;
-        id?: T;
-      };
-  notebooks?:
-    | T
-    | {
-        notes?: T;
-        id?: T;
-      };
+  gameNights?: T;
+  friends?: T;
+  notes?: T;
   avatar?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -529,18 +467,13 @@ export interface MediaSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "library_select".
+ * via the `definition` "libraries_select".
  */
-export interface LibrarySelect<T extends boolean = true> {
+export interface LibrariesSelect<T extends boolean = true> {
   name?: T;
   description?: T;
   createdBy?: T;
-  games?:
-    | T
-    | {
-        game?: T;
-        id?: T;
-      };
+  games?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -564,18 +497,8 @@ export interface GamenightsSelect<T extends boolean = true> {
   description?: T;
   date?: T;
   location?: T;
-  players?:
-    | T
-    | {
-        player?: T;
-        id?: T;
-      };
-  games?:
-    | T
-    | {
-        game?: T;
-        id?: T;
-      };
+  players?: T;
+  games?: T;
   recurring?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -604,18 +527,8 @@ export interface GamesSelect<T extends boolean = true> {
   minAge?: T;
   complexity?: T;
   'official link'?: T;
-  categories?:
-    | T
-    | {
-        category?: T;
-        id?: T;
-      };
-  mechanics?:
-    | T
-    | {
-        mechanic?: T;
-        id?: T;
-      };
+  categories?: T;
+  mechanics?: T;
   updatedAt?: T;
   createdAt?: T;
 }

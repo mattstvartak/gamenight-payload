@@ -47,6 +47,7 @@
         "tailwind-merge": "^3.0.2",
         "tailwindcss": "^4.0.9",
         "tailwindcss-animate": "^1.0.7",
+        "whatwg-url": "^14.1.1",
       },
       "devDependencies": {
         "@eslint/eslintrc": "^3.2.0",

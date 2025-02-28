@@ -6,6 +6,10 @@ import { adminsAndUser } from "./access/adminsAndUser";
 
 export const Games: CollectionConfig = {
   slug: "games",
+  labels: {
+    singular: "Game",
+    plural: "Games",
+  },
   admin: {
     useAsTitle: "name",
     group: "Content",
@@ -23,9 +27,8 @@ export const Games: CollectionConfig = {
   fields: [
     {
       name: "bggId",
-      type: "text",
+      type: "number" ,
       unique: true,
-      index: true,
     },
     {
       name: "name",
@@ -90,25 +93,15 @@ export const Games: CollectionConfig = {
     },
     {
       name: "categories",
-      type: "array",
-      fields: [
-        {
-          name: "category",
-          type: "relationship",
-          relationTo: "categories",
-        },
-      ],
+      type: "relationship",
+      relationTo: "categories",
+      hasMany: true,
     },
     {
       name: "mechanics",
-      type: "array",
-      fields: [
-        {
-          name: "mechanic",
-          type: "relationship",
-          relationTo: "mechanics",
-        },
-      ],
+      type: "relationship",
+      relationTo: "mechanics",
+      hasMany: true,
     },
   ],
 };

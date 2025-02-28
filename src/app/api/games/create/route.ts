@@ -259,7 +259,7 @@ export async function POST(req: Request) {
       const game = await payload.create({
         collection: "games",
         data: {
-          bggId,
+          bggId: Number(bggId),
           name: gameDetails.name,
           description: gameDetails.description,
           type: "boardgame",
@@ -272,12 +272,8 @@ export async function POST(req: Request) {
           maxPlaytime: gameDetails.maxPlaytime,
           minAge: gameDetails.minAge,
           complexity: gameDetails.weight,
-          categories: categoryIds
-            .filter((id): id is number => id !== null)
-            .map((id) => ({ category: id })),
-          mechanics: mechanicIds
-            .filter((id): id is number => id !== null)
-            .map((id) => ({ mechanic: id })),
+          categories: categoryIds.filter((id): id is number => id !== null),
+          mechanics: mechanicIds.filter((id): id is number => id !== null),
           images: imageIds,
         },
       });

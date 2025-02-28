@@ -51,25 +51,15 @@ export const GameNights: CollectionConfig = {
     },
     {
       name: "players",
-      type: "array",
-      fields: [
-        {
-          name: "player",
-          type: "relationship",
-          relationTo: "users",
-        }
-      ]
+      type: "relationship",
+      relationTo: "users",
+      hasMany: true,
     },
     {
       name: "games",
-      type: "array",
-      fields: [
-        {
-          name: "game",
-          type: "relationship",
-          relationTo: "games",
-        }
-      ]
+      type: "relationship",
+      relationTo: "games",
+      hasMany: true,
     },
     {
       name: "recurring",
