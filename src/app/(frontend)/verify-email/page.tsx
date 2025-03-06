@@ -85,8 +85,8 @@ export default function VerifyEmail() {
               Verification Failed
             </h1>
             <p className="mt-2 text-gray-600">
-              We couldn't verify your email. The link may have expired or is
-              invalid.
+              We couldn&apos;t verify your email. The link may have expired or
+              is invalid.
             </p>
           </div>
         )}

@@ -1,4 +1,3 @@
-import AppProvider from "@/components/app-provider";
 import {
   Breadcrumb,
   BreadcrumbItem,
