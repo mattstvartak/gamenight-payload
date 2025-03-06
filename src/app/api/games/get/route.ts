@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { getPayload } from "payload";
 import config from "@payload-config";
+import type { Game } from "@/payload-types";
+
+interface GetGameResponse {
+  game?: Game;
+  message?: string;
+  alreadyProcessed?: boolean;
+  error?: string;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -45,42 +53,38 @@ export async function GET(request: Request) {
           body: JSON.stringify({ bggId }),
         });
 
-        const result = await response.json();
+        const result = (await response.json()) as GetGameResponse;
 
         if (response.ok) {
-          // Always return the game from our database
           return NextResponse.json({
             game,
             message: "Game data retrieved, processing not completed",
-          });
+          } as GetGameResponse);
         } else {
           console.warn(
             `Failed to complete processing for game ${game.name}:`,
             result.error
           );
-          // Always return the game from our database
           return NextResponse.json({
             game,
             message:
               "Game data retrieved, processing not completed due to error",
-          });
+          } as GetGameResponse);
         }
       } catch (error) {
         console.error(
           `Error completing processing for game ${game.name}:`,
           error
         );
-        // Always return the game from our database
         return NextResponse.json({
           game,
           message:
             "Game data retrieved, processing not completed due to processing error",
-        });
+        } as GetGameResponse);
       }
     } else {
       // If the game doesn't exist, fetch it from BGG using our new endpoint
       try {
-        // Create a request to our addFromBGG endpoint
         const apiUrl = new URL(request.url);
         const baseUrl = `${apiUrl.protocol}//${apiUrl.host}`;
         const addFromBGGUrl = `${baseUrl}/api/games/add`;
@@ -93,23 +97,29 @@ export async function GET(request: Request) {
           body: JSON.stringify({ bggId }),
         });
 
-        const result = await response.json();
+        const result = (await response.json()) as GetGameResponse;
 
         if (response.ok) {
-          return NextResponse.json({ game: result.game });
+          return NextResponse.json({ game: result.game } as GetGameResponse);
         } else {
-          throw new Error(result.error || "Failed to add game from BGG");
+          return NextResponse.json(
+            { error: result.error || "Failed to add game" },
+            { status: response.status }
+          );
         }
       } catch (error) {
-        console.error("Error fetching game from BGG:", error);
+        console.error("Error adding game:", error);
         return NextResponse.json(
-          { error: "Error fetching game from BGG" },
+          { error: "Failed to add game" },
           { status: 500 }
         );
       }
     }
   } catch (error) {
     console.error("Error fetching game:", error);
-    return NextResponse.json({ error: "Error fetching game" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch game" },
+      { status: 500 }
+    );
   }
 }

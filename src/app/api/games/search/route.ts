@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchXMLAndConvertToObject } from "@/lib/utils/fetchXMLAndConvertToJson";
+import { BGGResponse, BGGItem } from "@/lib/utils/xml-types";
 
 export async function GET(request: Request) {
   try {
@@ -20,9 +21,6 @@ export async function GET(request: Request) {
     // Fetch and parse the XML data
     const jsonData = await fetchXMLAndConvertToObject(bggApiUrl);
 
-    // Log the results to console
-    console.log("BGG API Search Results:", JSON.stringify(jsonData, null, 2));
-
     // Process the data to a more usable format
     const games = processGameData(jsonData);
 
@@ -30,7 +28,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       query,
       count: games.length,
-      games,
+      results: games,
     });
   } catch (error) {
     console.error("Error searching games:", error);
@@ -42,30 +40,20 @@ export async function GET(request: Request) {
 }
 
 // Helper function to process the BGG API response into a more usable format
-function processGameData(data: any) {
+function processGameData(data: BGGResponse) {
   // BGG API returns data with the structure: items.item[...]
   const items = data?.items?.item || [];
 
   // Convert to an array if it's not already one
   const itemsArray = Array.isArray(items) ? items : [items];
 
-  return itemsArray.map((item) => {
-    // Extract the game information
-    const id = item?.["@attributes"]?.id;
-    const name =
-      item?.name?.["@attributes"]?.value ||
-      (Array.isArray(item?.name)
-        ? item.name.find((n: any) => n?.["@attributes"]?.type === "primary")?.[
-            "@attributes"
-          ]?.value
-        : item?.name?.["@attributes"]?.value);
-    const yearPublished = item?.yearpublished?.["@attributes"]?.value;
-
-    return {
-      id,
-      name,
-      yearPublished: yearPublished ? parseInt(yearPublished) : null,
-      thumbnailUrl: item?.thumbnail?.["#text"] || null,
-    };
-  });
+  return itemsArray.map((item) => ({
+    id: item.id,
+    type: item.type,
+    name: Array.isArray(item.name)
+      ? item.name.find((n) => n.type === "primary")?.value ||
+        item.name[0]?.value ||
+        ""
+      : item.name,
+  }));
 }

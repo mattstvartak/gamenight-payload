@@ -382,12 +382,6 @@ export async function GET(request: Request) {
     // Extract the BGG accessory item from the response
     const bggAccessory = bggResponse?.items?.item || {};
 
-    // Debug the BGG data structure
-    console.log(
-      "BGG Accessory Name Structure:",
-      JSON.stringify(bggAccessory.name, null, 2)
-    );
-
     // Extract accessory name using the helper function
     const name = extractAccessoryName(bggAccessory, accessoryId);
     console.log("Extracted accessory name:", name);

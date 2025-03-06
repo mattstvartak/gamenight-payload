@@ -24,7 +24,7 @@ export async function fetchBggGameData(bggId: string | number) {
 
     console.log(`Fetching BGG data for game ID: ${bggId}`);
     const data = await fetchXMLAndConvertToObject(
-      `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}`
+      `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`
     );
 
     // Check if the data has the expected structure

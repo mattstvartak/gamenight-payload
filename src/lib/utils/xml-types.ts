@@ -36,9 +36,10 @@ export interface BGGItem {
 }
 
 export interface BGGResponse {
-  items: {
+  items?: {
     item: BGGItem | BGGItem[];
   };
+  item?: BGGItem;
 }
 
 export type XMLValue =
@@ -72,8 +73,8 @@ export function isBGGResponse(value: XMLValue): value is BGGResponse {
   return (
     value !== null &&
     typeof value === "object" &&
-    "items" in value &&
-    typeof (value as any).items === "object"
+    (("items" in value && typeof (value as any).items === "object") ||
+      ("item" in value && typeof (value as any).item === "object"))
   );
 }
 

@@ -50,10 +50,12 @@ async function fetchWithRetry(
   throw new Error(`Failed to fetch after ${retries} retries`);
 }
 
-interface SearchGame extends Partial<Game> {
+interface SearchGame extends Omit<Partial<Game>, "bggId" | "images" | "type"> {
   isLoaded?: boolean;
   bggId: string;
   error?: string;
+  images?: { image?: number | Media | null }[];
+  type?: string;
 }
 
 interface SearchResult {
@@ -333,7 +335,10 @@ export function GameSearch({
                   maxPlayers: data.game.maxPlayers,
                   minPlaytime: data.game.minPlaytime,
                   maxPlaytime: data.game.maxPlaytime,
-                  images: data.game.images,
+                  images:
+                    data.game.images?.map((img: number | Media) => ({
+                      image: img,
+                    })) || [],
                   type: "boardgame",
                   isLoaded: true,
                 };

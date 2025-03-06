@@ -24,7 +24,6 @@ export default function VerifyEmail() {
         return;
       }
 
-      console.log(token);
       try {
         const res = await fetch(`/api/users/verify/${token}`, {
           method: "POST",

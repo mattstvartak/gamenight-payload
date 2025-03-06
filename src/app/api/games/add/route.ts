@@ -140,9 +140,6 @@ export async function POST(request: Request) {
 
       // If game already exists and processing is complete, return it immediately
       if (game.processing === false) {
-        console.log(
-          `Game ${game.name} (ID: ${game.id}) already exists and is fully processed, returning existing data`
-        );
         return NextResponse.json({
           game,
           message: "Game already exists and is fully processed",
@@ -152,9 +149,6 @@ export async function POST(request: Request) {
 
       // Always process relationships when a game exists but is still processing
       needsProcessing = true;
-      console.log(
-        `Game ${game.name} (ID: ${game.id}) exists but still processing, continuing with relationships processing`
-      );
     }
 
     // If we're handling an expansion, add a delay to respect BGG rate limits
@@ -165,7 +159,6 @@ export async function POST(request: Request) {
     // Fetch game data from BGG using our new API endpoint
     let bggGame;
     try {
-      console.log(`Fetching BGG data for game ID: ${bggId}`);
       const response = await fetch(`${url.origin}/api/bgg/game`, {
         method: "POST",
         headers: {
@@ -189,19 +182,27 @@ export async function POST(request: Request) {
     }
 
     // Extract all related data using our utility function
-    const publishers = extractBggEntityLinks(bggGame, "boardgamepublisher");
-    const designers = extractBggEntityLinks(bggGame, "boardgamedesigner");
-    const categories = extractBggEntityLinks(bggGame, "boardgamecategory");
-    const mechanics = extractBggEntityLinks(bggGame, "boardgamemechanic");
-    const artists = extractBggEntityLinks(bggGame, "boardgameartist");
-    const accessories = extractBggEntityLinks(bggGame, "boardgameaccessory");
+    const bggGameData = bggGame?.items?.item || bggGame?.item;
+    if (!bggGameData) {
+      throw new Error("Invalid BGG response: missing game data");
+    }
+
+    const publishers = extractBggEntityLinks(bggGameData, "boardgamepublisher");
+    const designers = extractBggEntityLinks(bggGameData, "boardgamedesigner");
+    const categories = extractBggEntityLinks(bggGameData, "boardgamecategory");
+    const mechanics = extractBggEntityLinks(bggGameData, "boardgamemechanic");
+    const artists = extractBggEntityLinks(bggGameData, "boardgameartist");
+    const accessories = extractBggEntityLinks(
+      bggGameData,
+      "boardgameaccessory"
+    );
 
     // Extract expansion information
-    const expansions = extractBggEntityLinks(bggGame, "boardgameexpansion");
+    const expansions = extractBggEntityLinks(bggGameData, "boardgameexpansion");
 
     // Extract implementation information (base games that this expansion is for)
     const implementations = extractBggEntityLinks(
-      bggGame,
+      bggGameData,
       "boardgameimplementation"
     );
 
@@ -209,13 +210,13 @@ export async function POST(request: Request) {
     // we'll use the general type field as a fallback
     const typeNames: string[] = [];
     const types: { id?: number; value: string }[] = [];
-    if (bggGame?.type) {
+    if (bggGameData?.type) {
       // For the general type field, we don't have a direct BGG ID
-      typeNames.push(bggGame.type);
-      types.push({ value: bggGame.type });
+      typeNames.push(bggGameData.type);
+      types.push({ value: bggGameData.type });
     }
     // Also check if there are any boardgametype entries in the link array
-    const boardgameTypes = extractBggEntityLinks(bggGame, "boardgametype");
+    const boardgameTypes = extractBggEntityLinks(bggGameData, "boardgametype");
     for (const type of boardgameTypes) {
       if (type?.value && !typeNames.includes(type.value)) {
         typeNames.push(type.value);
@@ -677,27 +678,30 @@ export async function POST(request: Request) {
 
     // Upload images if available
     let imageId = null;
-    if (bggGame && bggGame.image) {
+    if (bggGameData && bggGameData.image) {
       try {
         // Download the image to a temp file
-        const tempFilePath = await downloadImageToTemp(bggGame.image);
+        const tempFilePath = await downloadImageToTemp(bggGameData.image);
 
         if (tempFilePath) {
           // Get game name for folder structure and alt text
           let gameName = "unknown-game";
-          if (bggGame.name) {
-            if (Array.isArray(bggGame.name) && bggGame.name.length > 0) {
-              const primaryName = bggGame.name.find(
+          if (bggGameData.name) {
+            if (
+              Array.isArray(bggGameData.name) &&
+              bggGameData.name.length > 0
+            ) {
+              const primaryName = bggGameData.name.find(
                 (n: BGGNameItem) => n.type === "primary"
               );
-              gameName = primaryName?.value || bggGame.name[0].value;
+              gameName = primaryName?.value || bggGameData.name[0].value;
             } else if (
-              typeof bggGame.name === "object" &&
-              "value" in bggGame.name
+              typeof bggGameData.name === "object" &&
+              "value" in bggGameData.name
             ) {
-              gameName = bggGame.name.value;
-            } else if (typeof bggGame.name === "string") {
-              gameName = bggGame.name;
+              gameName = bggGameData.name.value;
+            } else if (typeof bggGameData.name === "string") {
+              gameName = bggGameData.name;
             }
           }
 
@@ -742,7 +746,7 @@ export async function POST(request: Request) {
     }
 
     // Prepare game data
-    const gameName = extractGameName(bggGame);
+    const gameName = extractGameName(bggGameData);
 
     const gameData: any = {
       bggId: bggId,
@@ -756,8 +760,8 @@ export async function POST(request: Request) {
     };
 
     // Add original name if different from primary name
-    if (Array.isArray(bggGame.name) && bggGame.name.length > 1) {
-      const alternateNames = bggGame.name.filter(
+    if (Array.isArray(bggGameData.name) && bggGameData.name.length > 1) {
+      const alternateNames = bggGameData.name.filter(
         (n: BGGNameItem) => n.type !== "primary"
       );
       if (alternateNames.length > 0) {
@@ -766,20 +770,20 @@ export async function POST(request: Request) {
     }
 
     // Only add fields if they exist in the BGG data
-    if (bggGame.description) {
+    if (bggGameData.description) {
       // Convert plain text description to Lexical editor format
-      gameData.description = formatRichText(bggGame.description);
+      gameData.description = formatRichText(bggGameData.description);
     }
 
     // Add numeric fields efficiently
     const numericFields = {
-      yearPublished: bggGame.yearpublished?.value,
-      minPlayers: bggGame.minplayers?.value,
-      maxPlayers: bggGame.maxplayers?.value,
-      playingTime: bggGame.playingtime?.value,
-      minPlaytime: bggGame.minplaytime?.value,
-      maxPlaytime: bggGame.maxplaytime?.value,
-      minAge: bggGame.minage?.value,
+      yearPublished: bggGameData.yearpublished?.value,
+      minPlayers: bggGameData.minplayers?.value,
+      maxPlayers: bggGameData.maxplayers?.value,
+      playingTime: bggGameData.playingtime?.value,
+      minPlaytime: bggGameData.minplaytime?.value,
+      maxPlaytime: bggGameData.maxplaytime?.value,
+      minAge: bggGameData.minage?.value,
     };
 
     Object.entries(numericFields).forEach(([key, value]) => {
@@ -789,28 +793,28 @@ export async function POST(request: Request) {
     });
 
     // Add rating and complexity data
-    if (bggGame.statistics?.ratings?.average?.value) {
+    if (bggGameData.statistics?.ratings?.average?.value) {
       gameData.userRating = parseFloat(
-        bggGame.statistics.ratings.average.value.toString()
+        bggGameData.statistics.ratings.average.value.toString()
       );
     }
 
-    if (bggGame.statistics?.ratings?.usersrated?.value) {
+    if (bggGameData.statistics?.ratings?.usersrated?.value) {
       gameData.userRatedCount = parseInt(
-        bggGame.statistics.ratings.usersrated.value.toString()
+        bggGameData.statistics.ratings.usersrated.value.toString()
       );
     }
 
-    if (bggGame.statistics?.ratings?.averageweight?.value) {
+    if (bggGameData.statistics?.ratings?.averageweight?.value) {
       gameData.complexity = parseFloat(
-        bggGame.statistics.ratings.averageweight.value.toString()
+        bggGameData.statistics.ratings.averageweight.value.toString()
       );
     }
 
-    if (bggGame.statistics?.ratings?.ranks) {
-      const ranks = Array.isArray(bggGame.statistics.ratings.ranks)
-        ? bggGame.statistics.ratings.ranks
-        : [bggGame.statistics.ratings.ranks];
+    if (bggGameData.statistics?.ratings?.ranks) {
+      const ranks = Array.isArray(bggGameData.statistics.ratings.ranks)
+        ? bggGameData.statistics.ratings.ranks
+        : [bggGameData.statistics.ratings.ranks];
 
       const overallRank = ranks.find(
         (r: BGGRank) => r.id === "1" || r.name === "boardgame"
@@ -821,8 +825,10 @@ export async function POST(request: Request) {
     }
 
     // Process suggested player counts if available
-    if (bggGame.poll) {
-      const polls = Array.isArray(bggGame.poll) ? bggGame.poll : [bggGame.poll];
+    if (bggGameData.poll) {
+      const polls = Array.isArray(bggGameData.poll)
+        ? bggGameData.poll
+        : [bggGameData.poll];
       const playerCountPoll = polls.find(
         (p: BGGPoll) => p.name === "suggested_numplayers"
       );
@@ -918,10 +924,6 @@ export async function POST(request: Request) {
     // Process accessories
     const accessoryIds = [];
     if (accessories && accessories.length > 0) {
-      console.log(
-        `Processing ${accessories.length} accessories for game ${gameName} (BGG ID: ${bggId})`
-      );
-
       // Extract all accessory BGG IDs
       const accessoryBggIds = accessories
         .filter((accessory: BGGLinkedEntity) => accessory && accessory.id)
@@ -935,30 +937,20 @@ export async function POST(request: Request) {
 
       for (const accessory of accessories as BGGLinkedEntity[]) {
         if (!accessory || !accessory.value) {
-          console.log(`Skipping invalid accessory:`, accessory);
           continue; // Skip if accessory or accessory.value is undefined
         }
 
         const accessoryBggId = String(accessory.id);
-        console.log(
-          `Processing accessory: ${accessory.value} (ID: ${accessoryBggId})`
-        );
 
         // Use cached value if available
         if (entityCache.accessories[accessory.value]) {
           accessoryIds.push(Number(entityCache.accessories[accessory.value]));
-          console.log(
-            `Using cached accessory ID for ${accessory.value}: ${entityCache.accessories[accessory.value]}`
-          );
         } else if (existingAccessoryMap[accessoryBggId]) {
           const accessoryId = existingAccessoryMap[accessoryBggId];
           accessoryIds.push(Number(accessoryId));
 
           // Convert string ID to number for entityCache
           entityCache.accessories[accessory.value] = Number(accessoryId);
-          console.log(
-            `Found existing accessory for ${accessory.value}: ${accessoryId} (from batch query)`
-          );
           continue;
         }
 
@@ -969,16 +961,8 @@ export async function POST(request: Request) {
 
     // Add accessories to game data
     if (accessoryIds.length > 0) {
-      console.log(
-        `Adding ${accessoryIds.length} accessories to game "${gameName}" (BGG ID: ${bggId}):`,
-        accessoryIds
-      );
       // Ensure all accessory IDs are numbers
       gameData.accessories = accessoryIds.map((id) => Number(id));
-    } else {
-      console.log(
-        `No accessories to add for game "${gameName}" (BGG ID: ${bggId})`
-      );
     }
 
     // Add image reference if available
@@ -1071,9 +1055,6 @@ export async function POST(request: Request) {
             .map((expansion: BGGLinkedEntity) => String(expansion.id));
 
           // Batch check which expansions already exist
-          console.log(
-            `Batch checking ${expansionBggIds.length} expansions for existence`
-          );
           const existingExpansionMap = await batchCheckExistence(
             "games",
             expansionBggIds
@@ -1088,16 +1069,9 @@ export async function POST(request: Request) {
               if (existingExpansionMap[expansionBggId]) {
                 const existingExpansionId =
                   existingExpansionMap[expansionBggId];
-                console.log(
-                  `Expansion ${expansion.value} already exists with ID: ${existingExpansionId}`
-                );
                 expansionIds.push(Number(existingExpansionId));
                 continue;
               }
-
-              console.log(
-                `Processing expansion: ${expansion.value} (${expansion.id})`
-              );
 
               // Call our games/add endpoint to create the expansion
               const response = await fetch(expansionApiUrl, {
@@ -1126,9 +1100,6 @@ export async function POST(request: Request) {
                           2,
                           consecutiveFailures - MAX_CONSECUTIVE_FAILURES
                         )
-                    );
-                    console.warn(
-                      `Multiple rate limit failures, backing off for ${backoffTime}ms before continuing`
                     );
                     await delay(backoffTime);
                   }
@@ -1162,9 +1133,6 @@ export async function POST(request: Request) {
 
           // Update the game with the expansion IDs
           if (expansionIds.length > 0) {
-            console.log(
-              `Updating game ${game.name} with ${expansionIds.length} expansions`
-            );
             try {
               // First get the current expansions to avoid overwriting any existing ones
               const currentGameData = await payload.findByID({
@@ -1193,10 +1161,6 @@ export async function POST(request: Request) {
                   processing: implementations.length === 0,
                 },
               });
-
-              console.log(
-                `Successfully updated game ${game.name} with expansions`
-              );
             } catch (error) {
               console.error(
                 `Error updating game ${game.name} with expansions:`,
@@ -1228,9 +1192,6 @@ export async function POST(request: Request) {
               });
 
               if (existingImplementation.docs.length > 0) {
-                console.log(
-                  `Implementation ${implementation.value} already exists with ID: ${existingImplementation.docs[0].id}`
-                );
                 implementationIds.push(
                   Number(existingImplementation.docs[0].id)
                 );
@@ -1238,10 +1199,6 @@ export async function POST(request: Request) {
               }
 
               // Call the same endpoint to add each implementation, with a flag to avoid recursion
-              console.log(
-                `Adding implementation ${implementation.value} (ID: ${implementation.id})`
-              );
-
               const response = await fetch(implementationApiUrl, {
                 method: "POST",
                 headers: {
@@ -1296,10 +1253,6 @@ export async function POST(request: Request) {
             processing: false,
           },
         });
-
-        console.log(
-          `Completed async processing for game ${game.name} (ID: ${game.id})`
-        );
       } catch (error) {
         console.error(`Error in async processing for game ${game.id}:`, error);
       }

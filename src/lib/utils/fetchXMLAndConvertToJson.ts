@@ -29,10 +29,6 @@ export const fetchXMLAndConvertToObject = async (
         const retryAfter = response.headers.get("retry-after");
         const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 5000;
 
-        console.warn(
-          `Rate limited by BGG API, retry-after: ${retryAfter || "not specified"}, waiting ${waitTime}ms`
-        );
-
         // Throw an error with status code so the retry logic can handle it
         const error = new Error(`Too Many Requests: BGG API rate limited`);
         (error as Error & { status?: number }).status = 429;
@@ -45,7 +41,10 @@ export const fetchXMLAndConvertToObject = async (
         throw error;
       }
 
-      return await response.text();
+      // Get the response as text
+      const text = await response.text();
+
+      return text;
     };
 
     // Use the rate limiter's retry mechanism
@@ -54,6 +53,20 @@ export const fetchXMLAndConvertToObject = async (
     const dom = new JSDOM();
     const parser = new dom.window.DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+    // Check for parsing errors
+    const parserError = xmlDoc.querySelector("parsererror");
+    if (parserError) {
+      console.error("XML Parsing Error:", parserError.textContent);
+      throw new Error("Failed to parse XML response");
+    }
+
+    // Check if the response is empty or has no items
+    const items = xmlDoc.getElementsByTagName("item");
+    if (items.length === 0) {
+      console.error("No items found in response");
+      throw new Error("No game found with the specified ID");
+    }
 
     function xmlToObject(xml: Node): XMLValue {
       if (xml.nodeType === 3) {
@@ -144,12 +157,28 @@ export const fetchXMLAndConvertToObject = async (
       return result;
     }
 
-    const intermediateObj = xmlToObject(xmlDoc);
+    // Start parsing from the root element
+    const intermediateObj = xmlToObject(xmlDoc.documentElement);
+
     const cleanedObj = cleanXmlObject(intermediateObj);
 
     // Ensure the response matches the BGGResponse type
     if (!isBGGResponse(cleanedObj)) {
-      throw new Error("Invalid XML structure: missing items");
+      console.error("Invalid XML structure:", cleanedObj);
+      if (cleanedObj && typeof cleanedObj === "object") {
+        console.error("Object type:", typeof cleanedObj);
+        console.error("Object keys:", Object.keys(cleanedObj));
+      }
+      throw new Error("Invalid XML structure: missing items or item");
+    }
+
+    // Normalize the response structure
+    if ("item" in cleanedObj && !("items" in cleanedObj) && cleanedObj.item) {
+      return {
+        items: {
+          item: cleanedObj.item,
+        },
+      };
     }
 
     return cleanedObj;
