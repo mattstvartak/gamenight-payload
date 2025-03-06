@@ -6,6 +6,11 @@ import { formatRichText } from "@/lib/utils/formatUtils";
 import { createPayloadFile, downloadImageToTemp } from "@/lib/utils/fileUtils";
 import { delay } from "@/lib/utils/asyncUtils";
 import { extractBggEntityLinks } from "@/lib/utils/bggUtils";
+import { fetchBggGameData } from "@/lib/utils/bggUtils";
+import {
+  batchCheckExistence,
+  updateExistenceCache,
+} from "@/lib/utils/databaseUtils";
 
 // Create a TypeData interface for operations that include bggId
 interface TypeData {
@@ -85,13 +90,25 @@ interface BGGGame {
   link?: BGGLink[];
 }
 
+// Define a type for BGG linked entities
+interface BGGLinkedEntity {
+  id: string | number;
+  value: string;
+  [key: string]: any;
+}
+
+// Shared variables for rate limiting
+const accessoryConsecutiveFailures = 0;
+const ACCESSORY_MAX_CONSECUTIVE_FAILURES = 3;
+const ACCESSORY_RATE_LIMIT_DELAY = 2000; // 2 seconds between requests
+
 /**
  * Adds a game from BoardGameGeek to the Payload CMS database
  */
 export async function POST(request: Request) {
   try {
     const payload = await getPayload({ config });
-    const { bggId } = await request.json();
+    const { bggId, isExpansion, baseGameId } = await request.json();
 
     // Get the request URL to check for query parameters
     const url = new URL(request.url);
@@ -235,7 +252,7 @@ export async function POST(request: Request) {
 
         // Use cached value if available
         if (entityCache.publishers[publisher.value]) {
-          publisherIds.push(entityCache.publishers[publisher.value]);
+          publisherIds.push(Number(entityCache.publishers[publisher.value]));
           continue;
         }
 
@@ -252,8 +269,8 @@ export async function POST(request: Request) {
         if (existingPublishers.docs.length > 0) {
           // Publisher exists, use its ID
           const publisherId = existingPublishers.docs[0].id;
-          publisherIds.push(publisherId);
-          entityCache.publishers[publisher.value] = publisherId;
+          publisherIds.push(Number(publisherId));
+          entityCache.publishers[publisher.value] = Number(publisherId);
 
           // We found existing publisher, update with BGG ID if needed
           if (publisher.id && !existingPublishers.docs[0].bggId) {
@@ -325,7 +342,7 @@ export async function POST(request: Request) {
 
             // Store in cache
             const publisherId = newPublisher.id;
-            entityCache.publishers[publisher.value] = publisherId;
+            entityCache.publishers[publisher.value] = Number(publisherId);
 
             // If we found an image, download and attach it
             if (imageUrl) {
@@ -368,7 +385,7 @@ export async function POST(request: Request) {
               }
             }
 
-            publisherIds.push(publisherId);
+            publisherIds.push(Number(publisherId));
           } catch (error) {
             console.error(
               `Error fetching publisher details for ${publisher.value}:`,
@@ -384,8 +401,8 @@ export async function POST(request: Request) {
               },
             });
             const publisherId = newPublisher.id;
-            publisherIds.push(publisherId);
-            entityCache.publishers[publisher.value] = publisherId;
+            publisherIds.push(Number(publisherId));
+            entityCache.publishers[publisher.value] = Number(publisherId);
           }
         }
       }
@@ -399,7 +416,7 @@ export async function POST(request: Request) {
 
         // Use cached value if available
         if (entityCache.designers[designer.value]) {
-          designerIds.push(entityCache.designers[designer.value]);
+          designerIds.push(Number(entityCache.designers[designer.value]));
           continue;
         }
 
@@ -414,8 +431,8 @@ export async function POST(request: Request) {
 
         if (existingDesigners.docs.length > 0) {
           const designerId = existingDesigners.docs[0].id;
-          designerIds.push(designerId);
-          entityCache.designers[designer.value] = designerId;
+          designerIds.push(Number(designerId));
+          entityCache.designers[designer.value] = Number(designerId);
 
           // Update bggId if missing
           if (designer.id && !existingDesigners.docs[0].bggId) {
@@ -436,8 +453,8 @@ export async function POST(request: Request) {
             },
           });
           const designerId = newDesigner.id;
-          designerIds.push(designerId);
-          entityCache.designers[designer.value] = designerId;
+          designerIds.push(Number(designerId));
+          entityCache.designers[designer.value] = Number(designerId);
         }
       }
     }
@@ -450,7 +467,7 @@ export async function POST(request: Request) {
 
         // Use cached value if available
         if (entityCache.categories[category.value]) {
-          categoryIds.push(entityCache.categories[category.value]);
+          categoryIds.push(Number(entityCache.categories[category.value]));
           continue;
         }
 
@@ -464,9 +481,10 @@ export async function POST(request: Request) {
         });
 
         if (existingCategories.docs.length > 0) {
+          // Category exists, use its ID
           const categoryId = existingCategories.docs[0].id;
-          categoryIds.push(categoryId);
-          entityCache.categories[category.value] = categoryId;
+          categoryIds.push(Number(categoryId));
+          entityCache.categories[category.value] = Number(categoryId);
 
           // Update bggId if missing
           if (!existingCategories.docs[0].bggId) {
@@ -487,8 +505,8 @@ export async function POST(request: Request) {
             },
           });
           const categoryId = newCategory.id;
-          categoryIds.push(categoryId);
-          entityCache.categories[category.value] = categoryId;
+          categoryIds.push(Number(categoryId));
+          entityCache.categories[category.value] = Number(categoryId);
         }
       }
     }
@@ -501,7 +519,7 @@ export async function POST(request: Request) {
 
         // Use cached value if available
         if (entityCache.mechanics[mechanic.value]) {
-          mechanicIds.push(entityCache.mechanics[mechanic.value]);
+          mechanicIds.push(Number(entityCache.mechanics[mechanic.value]));
           continue;
         }
 
@@ -515,9 +533,10 @@ export async function POST(request: Request) {
         });
 
         if (existingMechanics.docs.length > 0) {
+          // Mechanic exists, use its ID
           const mechanicId = existingMechanics.docs[0].id;
-          mechanicIds.push(mechanicId);
-          entityCache.mechanics[mechanic.value] = mechanicId;
+          mechanicIds.push(Number(mechanicId));
+          entityCache.mechanics[mechanic.value] = Number(mechanicId);
 
           // Update bggId if missing
           if (!existingMechanics.docs[0].bggId) {
@@ -538,8 +557,8 @@ export async function POST(request: Request) {
             },
           });
           const mechanicId = newMechanic.id;
-          mechanicIds.push(mechanicId);
-          entityCache.mechanics[mechanic.value] = mechanicId;
+          mechanicIds.push(Number(mechanicId));
+          entityCache.mechanics[mechanic.value] = Number(mechanicId);
         }
       }
     }
@@ -552,7 +571,7 @@ export async function POST(request: Request) {
 
         // Use cached value if available
         if (entityCache.artists[artist.value]) {
-          artistIds.push(entityCache.artists[artist.value]);
+          artistIds.push(Number(entityCache.artists[artist.value]));
           continue;
         }
 
@@ -566,9 +585,10 @@ export async function POST(request: Request) {
         });
 
         if (existingArtists.docs.length > 0) {
+          // Artist exists, use its ID
           const artistId = existingArtists.docs[0].id;
-          artistIds.push(artistId);
-          entityCache.artists[artist.value] = artistId;
+          artistIds.push(Number(artistId));
+          entityCache.artists[artist.value] = Number(artistId);
 
           // Update bggId if missing
           if (artist.id && !existingArtists.docs[0].bggId) {
@@ -589,8 +609,8 @@ export async function POST(request: Request) {
             },
           });
           const artistId = newArtist.id;
-          artistIds.push(artistId);
-          entityCache.artists[artist.value] = artistId;
+          artistIds.push(Number(artistId));
+          entityCache.artists[artist.value] = Number(artistId);
         }
       }
     }
@@ -603,7 +623,7 @@ export async function POST(request: Request) {
 
         // Use cached value if available
         if (entityCache.types[type.value]) {
-          typeIds.push(entityCache.types[type.value]);
+          typeIds.push(Number(entityCache.types[type.value]));
           continue;
         }
 
@@ -618,9 +638,10 @@ export async function POST(request: Request) {
         });
 
         if (existingTypes.docs.length > 0) {
+          // Type exists, use its ID
           const typeId = existingTypes.docs[0].id;
-          typeIds.push(typeId);
-          entityCache.types[type.value] = typeId;
+          typeIds.push(Number(typeId));
+          entityCache.types[type.value] = Number(typeId);
 
           // Update the type with BGG ID if missing
           if (type.id && !("bggId" in existingTypes.docs[0])) {
@@ -648,8 +669,8 @@ export async function POST(request: Request) {
             data: typeData,
           });
           const typeId = newType.id;
-          typeIds.push(typeId);
-          entityCache.types[type.value] = typeId;
+          typeIds.push(Number(typeId));
+          entityCache.types[type.value] = Number(typeId);
         }
       }
     }
@@ -726,10 +747,12 @@ export async function POST(request: Request) {
     const gameData: any = {
       bggId: bggId,
       name: gameName,
-      type: typeIds.length > 0 ? typeIds : undefined,
+      type: typeIds.length > 0 ? typeIds.map((id) => Number(id)) : undefined,
       // Initialize expansions and implementations arrays
       expansions: needsProcessing ? game?.expansions || [] : [],
       implementations: needsProcessing ? game?.implementations || [] : [],
+      // Set baseGame reference if this is an expansion
+      baseGame: isExpansion && baseGameId ? Number(baseGameId) : undefined,
     };
 
     // Add original name if different from primary name
@@ -873,109 +896,74 @@ export async function POST(request: Request) {
 
     // Add category, mechanic, designer, and publisher data
     if (categoryIds.length > 0) {
-      gameData.categories = categoryIds;
+      gameData.categories = categoryIds.map((id) => Number(id));
     }
 
     if (mechanicIds.length > 0) {
-      gameData.mechanics = mechanicIds;
+      gameData.mechanics = mechanicIds.map((id) => Number(id));
     }
 
     if (designerIds.length > 0) {
-      gameData.designers = designerIds;
+      gameData.designers = designerIds.map((id) => Number(id));
     }
 
     if (publisherIds.length > 0) {
-      gameData.publishers = publisherIds;
+      gameData.publishers = publisherIds.map((id) => Number(id));
     }
 
     if (artistIds.length > 0) {
-      gameData.artists = artistIds;
+      gameData.artists = artistIds.map((id) => Number(id));
     }
 
     // Process accessories
     const accessoryIds = [];
-    if (accessories && Array.isArray(accessories)) {
+    if (accessories && accessories.length > 0) {
       console.log(
-        `Processing ${accessories.length} accessories for game "${gameName}" (BGG ID: ${bggId})`
+        `Processing ${accessories.length} accessories for game ${gameName} (BGG ID: ${bggId})`
       );
-      for (const accessory of accessories) {
+
+      // Extract all accessory BGG IDs
+      const accessoryBggIds = accessories
+        .filter((accessory: BGGLinkedEntity) => accessory && accessory.id)
+        .map((accessory: BGGLinkedEntity) => String(accessory.id));
+
+      // Check which accessories already exist in a single batch query
+      const existingAccessoryMap = await batchCheckExistence(
+        "accessories",
+        accessoryBggIds
+      );
+
+      for (const accessory of accessories as BGGLinkedEntity[]) {
         if (!accessory || !accessory.value) {
           console.log(`Skipping invalid accessory:`, accessory);
           continue; // Skip if accessory or accessory.value is undefined
         }
 
+        const accessoryBggId = String(accessory.id);
         console.log(
-          `Processing accessory: ${accessory.value} (ID: ${accessory.id})`
+          `Processing accessory: ${accessory.value} (ID: ${accessoryBggId})`
         );
 
         // Use cached value if available
         if (entityCache.accessories[accessory.value]) {
-          accessoryIds.push(entityCache.accessories[accessory.value]);
+          accessoryIds.push(Number(entityCache.accessories[accessory.value]));
           console.log(
             `Using cached accessory ID for ${accessory.value}: ${entityCache.accessories[accessory.value]}`
+          );
+        } else if (existingAccessoryMap[accessoryBggId]) {
+          const accessoryId = existingAccessoryMap[accessoryBggId];
+          accessoryIds.push(Number(accessoryId));
+
+          // Convert string ID to number for entityCache
+          entityCache.accessories[accessory.value] = Number(accessoryId);
+          console.log(
+            `Found existing accessory for ${accessory.value}: ${accessoryId} (from batch query)`
           );
           continue;
         }
 
-        // Check if accessory already exists
-        const existingAccessories = await payload.find({
-          collection: "accessories",
-          where: {
-            bggId: {
-              equals: accessory.id,
-            },
-          },
-        });
-
-        if (existingAccessories.docs.length > 0) {
-          // Accessory exists, use its ID
-          const accessoryId = existingAccessories.docs[0].id;
-          accessoryIds.push(accessoryId);
-          entityCache.accessories[accessory.value] = accessoryId;
-          console.log(
-            `Found existing accessory for ${accessory.value}: ${accessoryId}`
-          );
-        } else {
-          // Process the accessory using our dedicated accessory/add endpoint
-          console.log(
-            `Creating new accessory ${accessory.value} (ID: ${accessory.id})`
-          );
-
-          try {
-            // Call our accessories/add endpoint to create the accessory
-            const response = await fetch(`${url.origin}/api/accessories/add`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ accessoryId: accessory.id }),
-            });
-
-            if (!response.ok) {
-              throw new Error(
-                `Failed to add accessory: ${response.statusText}`
-              );
-            }
-
-            const newAccessory = await response.json();
-
-            if (newAccessory?.accessory?.id) {
-              accessoryIds.push(newAccessory.accessory.id);
-              entityCache.accessories[accessory.value] =
-                newAccessory.accessory.id;
-              console.log(
-                `Created new accessory for ${accessory.value}: ${newAccessory.accessory.id}`
-              );
-            } else {
-              console.error(`No accessory ID found in response:`, newAccessory);
-            }
-          } catch (error) {
-            console.error(
-              `Error processing accessory ${accessory.value}:`,
-              error
-            );
-          }
-        }
+        // Add delay between accessory processing
+        await delay(ACCESSORY_RATE_LIMIT_DELAY);
       }
     }
 
@@ -985,7 +973,8 @@ export async function POST(request: Request) {
         `Adding ${accessoryIds.length} accessories to game "${gameName}" (BGG ID: ${bggId}):`,
         accessoryIds
       );
-      gameData.accessories = accessoryIds;
+      // Ensure all accessory IDs are numbers
+      gameData.accessories = accessoryIds.map((id) => Number(id));
     } else {
       console.log(
         `No accessories to add for game "${gameName}" (BGG ID: ${bggId})`
@@ -994,7 +983,7 @@ export async function POST(request: Request) {
 
     // Add image reference if available
     if (imageId) {
-      gameData.images = [imageId];
+      gameData.images = [Number(imageId)];
     }
 
     // Create a new game or update the existing one
@@ -1011,6 +1000,52 @@ export async function POST(request: Request) {
         collection: "games",
         data: gameData,
       });
+
+      // If this is an expansion, update the base game's expansions array
+      if (isExpansion && baseGameId) {
+        try {
+          console.log(
+            `This is an expansion for base game ID: ${baseGameId}, updating base game`
+          );
+
+          // Get the base game to see its current expansions
+          const baseGame = await payload.findByID({
+            collection: "games",
+            id: baseGameId,
+          });
+
+          // Get existing expansion IDs, properly handling the case where they might be objects
+          const existingExpansionIds =
+            baseGame.expansions?.map((exp) =>
+              typeof exp === "object" ? exp.id : exp
+            ) || [];
+
+          // Add this expansion to the list if it's not already there
+          if (!existingExpansionIds.includes(game.id)) {
+            const updatedExpansions = [...existingExpansionIds, game.id].map(
+              (id) => Number(id)
+            );
+
+            // Update the base game with the new expansion
+            await payload.update({
+              collection: "games",
+              id: baseGameId,
+              data: {
+                expansions: updatedExpansions,
+              },
+            });
+            console.log(
+              `Updated base game ${baseGame.name} with expansion ${game.name}`
+            );
+          } else {
+            console.log(
+              `Base game ${baseGame.name} already has this expansion`
+            );
+          }
+        } catch (error) {
+          console.error(`Error updating base game with expansion:`, error);
+        }
+      }
     }
 
     // Process expansions and implementations asynchronously
@@ -1020,96 +1055,162 @@ export async function POST(request: Request) {
         // Process expansions if there are any and we're not already processing expansions
         if (expansions.length > 0 && !isProcessingExpansions) {
           const expansionIds = [];
-          const RATE_LIMIT_DELAY = 500; // 0.5 second delay between calls
+          // Increase delay to avoid rate limiting
+          const RATE_LIMIT_DELAY = 2000; // 2 second delay between calls (increased from 500ms)
+          // Track consecutive failures to implement adaptive backoff
+          let consecutiveFailures = 0;
+          const MAX_CONSECUTIVE_FAILURES = 3;
+
           const protocol = request.headers.get("x-forwarded-proto") || "http";
           const host = request.headers.get("host") || "";
           const expansionApiUrl = `${protocol}://${host}/api/games/add?processingExpansions=true`;
 
-          for (const expansion of expansions) {
+          // Extract all expansion BGG IDs
+          const expansionBggIds = expansions
+            .filter((expansion: BGGLinkedEntity) => expansion && expansion.id)
+            .map((expansion: BGGLinkedEntity) => String(expansion.id));
+
+          // Batch check which expansions already exist
+          console.log(
+            `Batch checking ${expansionBggIds.length} expansions for existence`
+          );
+          const existingExpansionMap = await batchCheckExistence(
+            "games",
+            expansionBggIds
+          );
+
+          for (const expansion of expansions as BGGLinkedEntity[]) {
             try {
               // First check if this expansion already exists in our database
-              const existingExpansion = await payload.find({
-                collection: "games",
-                where: {
-                  bggId: {
-                    equals: expansion.id,
-                  },
+              const expansionBggId = String(expansion.id);
+
+              // Check if it was found in our batch query
+              if (existingExpansionMap[expansionBggId]) {
+                const existingExpansionId =
+                  existingExpansionMap[expansionBggId];
+                console.log(
+                  `Expansion ${expansion.value} already exists with ID: ${existingExpansionId}`
+                );
+                expansionIds.push(Number(existingExpansionId));
+                continue;
+              }
+
+              console.log(
+                `Processing expansion: ${expansion.value} (${expansion.id})`
+              );
+
+              // Call our games/add endpoint to create the expansion
+              const response = await fetch(expansionApiUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
                 },
+                body: JSON.stringify({
+                  bggId: expansion.id,
+                  isExpansion: true,
+                  baseGameId: game.id,
+                }),
               });
 
-              if (existingExpansion.docs.length > 0) {
-                // Expansion already exists, use its ID
-                console.log(
-                  `Expansion ${expansion.value} (ID: ${expansion.id}) already exists, skipping API call`
-                );
-                expansionIds.push(existingExpansion.docs[0].id);
+              if (!response.ok) {
+                // If we get a 429, increase the consecutive failures counter
+                if (response.status === 429) {
+                  consecutiveFailures++;
 
-                // Update existing expansion with base game relationship if needed
-                await payload.update({
-                  collection: "games",
-                  id: existingExpansion.docs[0].id,
-                  data: {
-                    baseGame: game.id,
-                  } as any,
-                });
-              } else {
-                // Call the same endpoint to add each expansion, but with a flag to avoid recursion
-                console.log(
-                  `Adding expansion ${expansion.value} (ID: ${expansion.id})`
-                );
-
-                const response = await fetch(expansionApiUrl, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ bggId: expansion.id }),
-                });
-
-                const result = await response.json();
-
-                if (result.game && result.game.id) {
-                  expansionIds.push(result.game.id);
-
-                  // Set this game as the baseGame for the expansion
-                  await payload.update({
-                    collection: "games",
-                    id: result.game.id,
-                    data: {
-                      baseGame: game.id,
-                    } as any,
-                  });
+                  // Implement exponential backoff for consecutive failures
+                  if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                    const backoffTime = Math.min(
+                      30000,
+                      RATE_LIMIT_DELAY *
+                        Math.pow(
+                          2,
+                          consecutiveFailures - MAX_CONSECUTIVE_FAILURES
+                        )
+                    );
+                    console.warn(
+                      `Multiple rate limit failures, backing off for ${backoffTime}ms before continuing`
+                    );
+                    await delay(backoffTime);
+                  }
                 }
 
-                // Add delay before processing next expansion to avoid rate limiting
-                await delay(RATE_LIMIT_DELAY);
+                console.error(
+                  `Failed to process expansion ${expansion.value} (${expansion.id}): ${response.statusText}`
+                );
+                continue;
               }
+
+              // Reset consecutive failures on success
+              consecutiveFailures = 0;
+
+              const expansionData = await response.json();
+              if (expansionData?.id) {
+                expansionIds.push(Number(expansionData.id));
+                // Also update our existence cache
+                updateExistenceCache("games", expansionBggId, expansionData.id);
+              }
+
+              // Apply rate limiting between expansion calls
+              await delay(RATE_LIMIT_DELAY);
             } catch (error) {
               console.error(
-                `Error adding expansion ${expansion.value}:`,
+                `Error processing expansion ${expansion.value}:`,
                 error
               );
-              // Continue with next expansion even if this one fails
-              await delay(RATE_LIMIT_DELAY);
             }
           }
 
-          // Update the game with the expansion IDs if any were successfully added
+          // Update the game with the expansion IDs
           if (expansionIds.length > 0) {
-            await payload.update({
-              collection: "games",
-              id: game.id,
-              data: {
-                expansions: expansionIds,
-              },
-            });
+            console.log(
+              `Updating game ${game.name} with ${expansionIds.length} expansions`
+            );
+            try {
+              // First get the current expansions to avoid overwriting any existing ones
+              const currentGameData = await payload.findByID({
+                collection: "games",
+                id: game.id,
+              });
+
+              // Combine existing and new expansion IDs, avoiding duplicates
+              const existingExpansionIds =
+                currentGameData.expansions?.map((exp) =>
+                  typeof exp === "object" ? exp.id : exp
+                ) || [];
+
+              // Create a Set to remove duplicates
+              const combinedExpansionIds = [
+                ...new Set([...existingExpansionIds, ...expansionIds]),
+              ].map((id) => Number(id)); // Ensure all IDs are numbers
+
+              // Update the game with the combined list of expansions
+              await payload.update({
+                collection: "games",
+                id: game.id,
+                data: {
+                  expansions: combinedExpansionIds,
+                  // Mark as no longer processing if this was the last step
+                  processing: implementations.length === 0,
+                },
+              });
+
+              console.log(
+                `Successfully updated game ${game.name} with expansions`
+              );
+            } catch (error) {
+              console.error(
+                `Error updating game ${game.name} with expansions:`,
+                error
+              );
+            }
           }
         }
 
         // Process implementations if there are any
         if (implementations.length > 0) {
           const implementationIds = [];
-          const RATE_LIMIT_DELAY = 500; // 0.5 second delay between calls
+          // Increase delay to avoid rate limiting
+          const RATE_LIMIT_DELAY = 2000; // 2 second delay between calls (increased from 500ms)
           const protocol = request.headers.get("x-forwarded-proto") || "http";
           const host = request.headers.get("host") || "";
           const implementationApiUrl = `${protocol}://${host}/api/games/add?processingExpansions=true`;
@@ -1121,47 +1222,42 @@ export async function POST(request: Request) {
                 collection: "games",
                 where: {
                   bggId: {
-                    equals: implementation.id,
+                    equals: Number(implementation.id),
                   },
                 },
               });
 
               if (existingImplementation.docs.length > 0) {
-                // Implementation already exists, use its ID
                 console.log(
-                  `Implementation ${implementation.value} (ID: ${implementation.id}) already exists, skipping API call`
+                  `Implementation ${implementation.value} already exists with ID: ${existingImplementation.docs[0].id}`
                 );
-                implementationIds.push(existingImplementation.docs[0].id);
-
-                // Update existing implementation (no changes needed beyond ensuring its existence)
-                await payload.update({
-                  collection: "games",
-                  id: existingImplementation.docs[0].id,
-                  data: {},
-                });
-              } else {
-                // Call the same endpoint to add each implementation, with a flag to avoid recursion
-                console.log(
-                  `Adding implementation ${implementation.value} (ID: ${implementation.id})`
+                implementationIds.push(
+                  Number(existingImplementation.docs[0].id)
                 );
-
-                const response = await fetch(implementationApiUrl, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ bggId: implementation.id }),
-                });
-
-                const result = await response.json();
-
-                if (result.game && result.game.id) {
-                  implementationIds.push(result.game.id);
-                }
-
-                // Add delay before processing next implementation to avoid rate limiting
-                await delay(RATE_LIMIT_DELAY);
+                continue;
               }
+
+              // Call the same endpoint to add each implementation, with a flag to avoid recursion
+              console.log(
+                `Adding implementation ${implementation.value} (ID: ${implementation.id})`
+              );
+
+              const response = await fetch(implementationApiUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ bggId: implementation.id }),
+              });
+
+              const result = await response.json();
+
+              if (result?.game?.id) {
+                implementationIds.push(Number(result.game.id));
+              }
+
+              // Add delay before processing next implementation to avoid rate limiting
+              await delay(RATE_LIMIT_DELAY);
             } catch (error) {
               console.error(
                 `Error adding implementation ${implementation.value}:`,
@@ -1174,13 +1270,21 @@ export async function POST(request: Request) {
 
           // Update the game with the implementation IDs if any were successfully added
           if (implementationIds.length > 0) {
-            await payload.update({
-              collection: "games",
-              id: game.id,
-              data: {
-                implementations: implementationIds,
-              },
-            });
+            try {
+              await payload.update({
+                collection: "games",
+                id: game.id,
+                data: {
+                  implementations: implementationIds.map((id) => Number(id)), // Ensure all IDs are numbers
+                  processing: false, // Mark as no longer processing
+                },
+              });
+            } catch (error) {
+              console.error(
+                `Error updating game ${game.name} with implementations:`,
+                error
+              );
+            }
           }
         }
 

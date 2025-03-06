@@ -1,4 +1,5 @@
 import { JSDOM } from "jsdom";
+import { bggRateLimiter } from "./asyncUtils";
 
 /**
  * Fetches XML from a URL and converts it to a clean JavaScript object
@@ -8,12 +9,38 @@ import { JSDOM } from "jsdom";
  */
 export const fetchXMLAndConvertToObject = async (url: string) => {
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
+    // Use the rate limiter's withRetry method to handle rate limiting
+    const fetchWithRetry = async (fetchUrl: string) => {
+      const response = await fetch(fetchUrl);
 
-    const xmlText = await response.text();
+      // Handle 429 Too Many Requests explicitly
+      if (response.status === 429) {
+        // Extract retry-after header if available
+        const retryAfter = response.headers.get("retry-after");
+        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 5000;
+
+        console.warn(
+          `Rate limited by BGG API, retry-after: ${retryAfter || "not specified"}, waiting ${waitTime}ms`
+        );
+
+        // Throw an error with status code so the retry logic can handle it
+        const error = new Error(`Too Many Requests: BGG API rate limited`);
+        (error as any).status = 429;
+        throw error;
+      }
+
+      if (!response.ok) {
+        const error = new Error(`HTTP error! Status: ${response.status}`);
+        (error as any).status = response.status;
+        throw error;
+      }
+
+      return await response.text();
+    };
+
+    // Use the rate limiter's retry mechanism
+    const xmlText = await bggRateLimiter.withRetry(fetchWithRetry, url);
+
     const dom = new JSDOM();
     const parser = new dom.window.DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, "text/xml");

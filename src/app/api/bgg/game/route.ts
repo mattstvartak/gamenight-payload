@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchBggGameData, extractBggEntityLinks } from "@/lib/utils/bggUtils";
-import { delay } from "@/lib/utils/asyncUtils";
+import { bggRateLimiter } from "@/lib/utils/asyncUtils";
 
 /**
  * API endpoint to fetch game data from BoardGameGeek
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     }
 
     // Apply rate limiting
-    await delay(300);
+    await bggRateLimiter.getToken();
 
     // Fetch game data from BGG
     const bggData = await fetchBggGameData(bggId);
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     // Apply rate limiting
-    await delay(300);
+    await bggRateLimiter.getToken();
 
     // Fetch game data from BGG
     const bggData = await fetchBggGameData(bggId);

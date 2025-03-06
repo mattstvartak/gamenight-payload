@@ -34,11 +34,26 @@ export async function createPayloadFile(filePath: string, entityName: string) {
  * @param url URL of the image to download
  * @returns Path to the temporary file or null if download failed
  */
-export async function downloadImageToTemp(url: string): Promise<string | null> {
+export async function downloadImageToTemp(
+  url: string | any
+): Promise<string | null> {
   try {
+    // Handle case where url might be an object instead of a string
+    const imageUrl =
+      typeof url === "string"
+        ? url
+        : url && typeof url === "object" && url.value
+          ? url.value
+          : String(url);
+
+    if (!imageUrl || typeof imageUrl !== "string") {
+      console.error("Invalid image URL provided:", url);
+      return null;
+    }
+
     // Create a temp file path
     const tempDir = os.tmpdir();
-    const fileExtension = url.split(".").pop()?.split("?")[0] || "jpg";
+    const fileExtension = imageUrl.split(".").pop()?.split("?")[0] || "jpg";
     const tempFilePath = path.join(
       tempDir,
       `temp_${Date.now()}.${fileExtension}`
@@ -50,7 +65,7 @@ export async function downloadImageToTemp(url: string): Promise<string | null> {
     // Download the file
     await new Promise<void>((resolve, reject) => {
       https
-        .get(url, (response) => {
+        .get(imageUrl, (response) => {
           if (response.statusCode !== 200) {
             reject(
               new Error(`Failed to download image: ${response.statusCode}`)

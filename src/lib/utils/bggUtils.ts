@@ -1,13 +1,27 @@
-import { delay } from "./asyncUtils";
 import { fetchXMLAndConvertToObject } from "./fetchXMLAndConvertToJson";
 
+// Simple in-memory cache for BGG responses with expiration
+const bggCache: Record<string, { data: any; timestamp: number }> = {};
+const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
 /**
- * Fetches game data from BGG API
+ * Fetches game data from BGG API with caching
  * @param bggId The BoardGameGeek ID of the game to fetch
  * @returns The parsed game data from BGG
  */
 export async function fetchBggGameData(bggId: string | number) {
   try {
+    const cacheKey = `game_${bggId}`;
+
+    // Check if we have a valid cached response
+    if (
+      bggCache[cacheKey] &&
+      Date.now() - bggCache[cacheKey].timestamp < CACHE_EXPIRY
+    ) {
+      console.log(`Using cached BGG data for game ID: ${bggId}`);
+      return bggCache[cacheKey].data;
+    }
+
     console.log(`Fetching BGG data for game ID: ${bggId}`);
     const data = await fetchXMLAndConvertToObject(
       `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}`
@@ -17,6 +31,12 @@ export async function fetchBggGameData(bggId: string | number) {
     if (!data || typeof data !== "object") {
       throw new Error("Invalid data received from BGG");
     }
+
+    // Cache the response
+    bggCache[cacheKey] = {
+      data,
+      timestamp: Date.now(),
+    };
 
     return data;
   } catch (error: any) {
@@ -28,12 +48,23 @@ export async function fetchBggGameData(bggId: string | number) {
 }
 
 /**
- * Fetches publisher data from BGG API
+ * Fetches publisher data from BGG API with caching
  * @param publisherId The BoardGameGeek publisher ID
  * @returns The parsed publisher data from BGG
  */
 export async function fetchBggPublisherData(publisherId: string | number) {
   try {
+    const cacheKey = `publisher_${publisherId}`;
+
+    // Check if we have a valid cached response
+    if (
+      bggCache[cacheKey] &&
+      Date.now() - bggCache[cacheKey].timestamp < CACHE_EXPIRY
+    ) {
+      console.log(`Using cached publisher info for ID: ${publisherId}`);
+      return bggCache[cacheKey].data;
+    }
+
     console.log(`Fetching detailed publisher info for ID: ${publisherId}`);
 
     const data = await fetchXMLAndConvertToObject(
@@ -47,6 +78,12 @@ export async function fetchBggPublisherData(publisherId: string | number) {
       );
       return {};
     }
+
+    // Cache the response
+    bggCache[cacheKey] = {
+      data,
+      timestamp: Date.now(),
+    };
 
     return data;
   } catch (error) {
@@ -80,12 +117,23 @@ export function extractBggEntityLinks(bggGame: any, entityType: string) {
 }
 
 /**
- * Fetches accessory data from BGG API
+ * Fetches accessory data from BGG API with caching
  * @param accessoryId The BoardGameGeek ID of the accessory to fetch
  * @returns The parsed accessory data from BGG
  */
 export async function fetchBggAccessoryData(accessoryId: string | number) {
   try {
+    const cacheKey = `accessory_${accessoryId}`;
+
+    // Check if we have a valid cached response
+    if (
+      bggCache[cacheKey] &&
+      Date.now() - bggCache[cacheKey].timestamp < CACHE_EXPIRY
+    ) {
+      console.log(`Using cached BGG data for accessory ID: ${accessoryId}`);
+      return bggCache[cacheKey].data;
+    }
+
     console.log(`Fetching BGG data for accessory ID: ${accessoryId}`);
     const data = await fetchXMLAndConvertToObject(
       `https://boardgamegeek.com/xmlapi2/thing?id=${accessoryId}`
@@ -95,6 +143,12 @@ export async function fetchBggAccessoryData(accessoryId: string | number) {
     if (!data || typeof data !== "object") {
       throw new Error("Invalid data received from BGG");
     }
+
+    // Cache the response
+    bggCache[cacheKey] = {
+      data,
+      timestamp: Date.now(),
+    };
 
     return data;
   } catch (error: any) {
