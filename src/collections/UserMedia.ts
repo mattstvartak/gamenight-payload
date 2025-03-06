@@ -4,11 +4,15 @@ import { admins } from "./access/admins";
 import { adminsAndUser } from "./access/adminsAndUser";
 import { anyone } from "./access/anyone";
 
-export const Media: CollectionConfig = {
-  slug: "media",
+export const UserMedia: CollectionConfig = {
+  slug: "usermedia",
   admin: {
     useAsTitle: "alt",
     group: "Content",
+  },
+  labels: {
+    singular: "User Media",
+    plural: "User Media",
   },
   access: {
     read: adminsAndUser,
@@ -23,7 +27,6 @@ export const Media: CollectionConfig = {
   upload: {
     disableLocalStorage: true,
     staticDir: "media",
-    focalPoint: false,
     imageSizes: [
       {
         name: "thumbnail",
@@ -71,6 +74,20 @@ export const Media: CollectionConfig = {
     {
       name: "filesize",
       type: "number",
+      admin: {
+        readOnly: true,
+      },
+    },
+    {
+      name: "gameId",
+      type: "text",
+      admin: {
+        readOnly: true,
+      },
+    },
+    {
+      name: "gameName",
+      type: "text",
       admin: {
         readOnly: true,
       },

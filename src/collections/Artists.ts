@@ -1,18 +1,18 @@
 import type { CollectionConfig } from "payload";
-import { adminsAndUser } from "./access/adminsAndUser";
-import { admins } from "./access/admins";
 import { anyone } from "./access/anyone";
+import { admins } from "./access/admins";
 import { checkRole } from "./access/checkRole";
+import { adminsAndUser } from "./access/adminsAndUser";
 
-export const Libraries: CollectionConfig = {
-  slug: "libraries",
+export const Artists: CollectionConfig = {
+  slug: "artists",
   labels: {
-    singular: "Library",
-    plural: "Libraries",
+    singular: "Artist",
+    plural: "Artists",
   },
   admin: {
     useAsTitle: "name",
-    group: "User Collections",
+    group: "Collections",
   },
   access: {
     read: adminsAndUser,
@@ -26,6 +26,10 @@ export const Libraries: CollectionConfig = {
   },
   fields: [
     {
+      name: "bggId",
+      type: "number",
+    },
+    {
       name: "name",
       type: "text",
     },
@@ -34,16 +38,10 @@ export const Libraries: CollectionConfig = {
       type: "richText",
     },
     {
-      name: "createdBy",
-      type: "relationship",
-      relationTo: "users",
-      hasMany: false,
-    },
-    {
       name: "games",
-      type: "relationship",
-      relationTo: "games",
-      hasMany: true,
+      type: "join",
+      collection: "games",
+      on: "artists",
     },
   ],
 };

@@ -1,259 +1,115 @@
 import { NextResponse } from "next/server";
 import { getPayload } from "payload";
-import config from "@/payload.config";
-import { JSDOM } from "jsdom";
-import { getBaseURL } from "@/lib/utils/getBaseURL";
+import config from "@payload-config";
 
-async function fetchBGGGameDetails(bggId: string) {
-  const maxRetries = 3;
-  const delayMs = 2000; // 2 seconds delay between retries
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const bggId = searchParams.get("bggId");
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await fetch(
-        `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`
-      );
-
-      const text = await response.text();
-
-      // Check if the response is HTML (error page) instead of XML
-      if (text.trim().toLowerCase().startsWith("<!doctype")) {
-        if (attempt === maxRetries) {
-          throw new Error("BoardGameGeek API is temporarily unavailable");
-        }
-        // Wait before retrying
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        continue;
-      }
-
-      const dom = new JSDOM(text, { contentType: "text/xml" });
-      const xmlDoc = dom.window.document;
-      const item = xmlDoc.querySelector("item");
-
-      if (!item) {
-        throw new Error("Game not found on BoardGameGeek");
-      }
-
-      const nameElement = item.querySelector('name[type="primary"]');
-      const description = item.querySelector("description")?.textContent;
-      const yearPublished = item
-        .querySelector("yearpublished")
-        ?.getAttribute("value");
-      const thumbnail = item.querySelector("thumbnail")?.textContent;
-      const image = item.querySelector("image")?.textContent;
-      const minPlayers = Number(
-        item.querySelector("minplayers")?.getAttribute("value")
-      );
-      const maxPlayers = Number(
-        item.querySelector("maxplayers")?.getAttribute("value")
-      );
-      const minPlaytime = Number(
-        item.querySelector("minplaytime")?.getAttribute("value")
-      );
-      const maxPlaytime = Number(
-        item.querySelector("maxplaytime")?.getAttribute("value")
-      );
-      const minAge = Number(
-        item.querySelector("minage")?.getAttribute("value")
-      );
-      const rating = Number(
-        item
-          .querySelector("statistics > ratings > average")
-          ?.getAttribute("value")
-      );
-      const weight = Number(
-        item
-          .querySelector("statistics > ratings > averageweight")
-          ?.getAttribute("value")
-      );
-
-      const categories = Array.from(
-        item.querySelectorAll(
-          'link[type="boardgamecategory"]'
-        ) as NodeListOf<Element>
-      ).map((el) => el.getAttribute("value") || "");
-      const mechanics = Array.from(
-        item.querySelectorAll(
-          'link[type="boardgamemechanic"]'
-        ) as NodeListOf<Element>
-      ).map((el) => el.getAttribute("value") || "");
-      const designers = Array.from(
-        item.querySelectorAll(
-          'link[type="boardgamedesigner"]'
-        ) as NodeListOf<Element>
-      ).map((el) => el.getAttribute("value") || "");
-      const publishers = Array.from(
-        item.querySelectorAll(
-          'link[type="boardgamepublisher"]'
-        ) as NodeListOf<Element>
-      ).map((el) => el.getAttribute("value") || "");
-
-      return {
-        name: nameElement?.getAttribute("value") || "",
-        description: description || undefined,
-        yearPublished: yearPublished || undefined,
-        thumbnail: thumbnail || undefined,
-        image: image || undefined,
-        minPlayers: minPlayers || undefined,
-        maxPlayers: maxPlayers || undefined,
-        minPlaytime: minPlaytime || undefined,
-        maxPlaytime: maxPlaytime || undefined,
-        minAge: minAge || undefined,
-        rating: rating || undefined,
-        weight: weight || undefined,
-        categories,
-        mechanics,
-        designers,
-        publishers,
-      };
-    } catch (error) {
-      if (attempt === maxRetries) {
-        throw error;
-      }
-      // Wait before retrying
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
+  if (!bggId) {
+    return NextResponse.json({ error: "BGG ID is required" }, { status: 400 });
   }
-  throw new Error("Failed to fetch game details after all retries");
-}
 
-export async function GET(req: Request) {
+  const payload = await getPayload({ config });
+
   try {
-    const { searchParams } = new URL(req.url);
-    const bggId = searchParams.get("bggId");
-
-    if (!bggId) {
-      return NextResponse.json(
-        { error: "BoardGameGeek ID is required" },
-        { status: 400 }
-      );
-    }
-
-    const payload = await getPayload({
-      config,
-    });
-
-    // First try to get the game from our database
-    const existingGame = await payload.find({
+    // First check if the game already exists in our database
+    const res = await payload.find({
       collection: "games",
       where: {
         bggId: {
           equals: bggId,
         },
       },
-      depth: 2,
     });
 
-    // If game exists in Payload, return it
-    if (existingGame.docs.length > 0) {
-      const payloadGame = existingGame.docs[0];
-      return NextResponse.json({
-        source: "payload",
-        game: {
-          id: bggId,
-          name: payloadGame.name || "",
-          description: payloadGame.description || undefined,
-          yearPublished: payloadGame.yearPublished?.toString(),
-          minPlayers: payloadGame.minPlayers || undefined,
-          maxPlayers: payloadGame.maxPlayers || undefined,
-          minPlaytime: payloadGame.minPlaytime || undefined,
-          maxPlaytime: payloadGame.maxPlaytime || undefined,
-          minAge: payloadGame.minAge || undefined,
-          weight: payloadGame.complexity || undefined,
-          images: payloadGame.images
-            ?.map((img) => ({
-              image: typeof img.image === "number" ? null : img.image,
-            }))
-            .filter((img) => img.image !== null),
-          categories:
-            payloadGame.categories
-              ?.map((c) => {
-                if (typeof c === "number") return "";
-                return c.name || "";
-              })
-              .filter((name) => name !== "") || [],
-          mechanics:
-            payloadGame.mechanics
-              ?.map((m) => {
-                if (typeof m === "number") return "";
-                return m.name || "";
-              })
-              .filter((name) => name !== "") || [],
-        },
-      });
-    }
+    if (res.docs.length > 0) {
+      const game = res.docs[0];
 
-    // If game doesn't exist, get it from BGG
-    const bggGame = await fetchBGGGameDetails(bggId);
-
-    // Create the game using the create endpoint
-    const createResponse = await fetch(`${getBaseURL()}/api/games/create`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        bggId,
-        gameDetails: bggGame,
-      }),
-    });
-
-    if (!createResponse.ok) {
-      const errorData = await createResponse.json();
-      throw new Error(
-        errorData.error ||
-          errorData.details ||
-          "Failed to create game in database"
+      // Always try to complete processing via the add endpoint
+      console.log(
+        `Game ${game.name} (ID: ${game.id}) exists, calling add endpoint to ensure complete processing`
       );
-    }
 
-    // Return the BGG data immediately while the game is being created
-    return NextResponse.json({
-      source: "bgg",
-      game: {
-        id: bggId,
-        ...bggGame,
-        // Convert BGG image data to match Payload structure
-        images: [
-          ...(bggGame.image
-            ? [
-                {
-                  image: {
-                    url: bggGame.image,
-                    alt: `${bggGame.name} main image`,
-                    filename: bggGame.image.split("/").pop() || "image.jpg",
-                  },
-                },
-              ]
-            : []),
-          ...(bggGame.thumbnail
-            ? [
-                {
-                  image: {
-                    url: bggGame.thumbnail,
-                    alt: `${bggGame.name} thumbnail`,
-                    filename:
-                      bggGame.thumbnail.split("/").pop() || "thumbnail.jpg",
-                  },
-                },
-              ]
-            : []),
-        ],
-        // Remove the old image fields
-        image: undefined,
-        thumbnail: undefined,
-      },
-    });
+      try {
+        // Create a request to our addFromBGG endpoint
+        const apiUrl = new URL(request.url);
+        const baseUrl = `${apiUrl.protocol}//${apiUrl.host}`;
+        const addFromBGGUrl = `${baseUrl}/api/games/add`;
+
+        const response = await fetch(addFromBGGUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ bggId }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          // Always return the game from our database
+          return NextResponse.json({
+            game,
+            message: "Game data retrieved, processing not completed",
+          });
+        } else {
+          console.warn(
+            `Failed to complete processing for game ${game.name}:`,
+            result.error
+          );
+          // Always return the game from our database
+          return NextResponse.json({
+            game,
+            message:
+              "Game data retrieved, processing not completed due to error",
+          });
+        }
+      } catch (error) {
+        console.error(
+          `Error completing processing for game ${game.name}:`,
+          error
+        );
+        // Always return the game from our database
+        return NextResponse.json({
+          game,
+          message:
+            "Game data retrieved, processing not completed due to processing error",
+        });
+      }
+    } else {
+      // If the game doesn't exist, fetch it from BGG using our new endpoint
+      try {
+        // Create a request to our addFromBGG endpoint
+        const apiUrl = new URL(request.url);
+        const baseUrl = `${apiUrl.protocol}//${apiUrl.host}`;
+        const addFromBGGUrl = `${baseUrl}/api/games/add`;
+
+        const response = await fetch(addFromBGGUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ bggId }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          return NextResponse.json({ game: result.game });
+        } else {
+          throw new Error(result.error || "Failed to add game from BGG");
+        }
+      } catch (error) {
+        console.error("Error fetching game from BGG:", error);
+        return NextResponse.json(
+          { error: "Error fetching game from BGG" },
+          { status: 500 }
+        );
+      }
+    }
   } catch (error) {
     console.error("Error fetching game:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch game details",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error fetching game" }, { status: 500 });
   }
 }
