@@ -79,5 +79,34 @@ export function extractBggEntityLinks(bggGame: any, entityType: string) {
   }));
 }
 
+/**
+ * Fetches accessory data from BGG API
+ * @param accessoryId The BoardGameGeek ID of the accessory to fetch
+ * @returns The parsed accessory data from BGG
+ */
+export async function fetchBggAccessoryData(accessoryId: string | number) {
+  try {
+    console.log(`Fetching BGG data for accessory ID: ${accessoryId}`);
+    const data = await fetchXMLAndConvertToObject(
+      `https://boardgamegeek.com/xmlapi2/thing?id=${accessoryId}`
+    );
+
+    // Check if the data has the expected structure
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid data received from BGG");
+    }
+
+    return data;
+  } catch (error: any) {
+    console.error(
+      `Error fetching data from BGG for accessory ID ${accessoryId}:`,
+      error
+    );
+    throw new Error(
+      `Failed to fetch accessory data from BoardGameGeek: ${error.message}`
+    );
+  }
+}
+
 // Re-export the XML conversion function for compatibility
 export { fetchXMLAndConvertToObject } from "@/lib/utils/fetchXMLAndConvertToJson";

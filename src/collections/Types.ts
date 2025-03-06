@@ -26,16 +26,8 @@ export const Types: CollectionConfig = {
   },
   fields: [
     {
-      name: "bggId",
-      type: "number",
-    },
-    {
       name: "name",
       type: "text",
-    },
-    {
-      name: "description",
-      type: "richText",
     },
     {
       name: "games",

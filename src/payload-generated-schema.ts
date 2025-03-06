@@ -135,7 +135,6 @@ export const artists = pgTable(
     bggId: numeric("bgg_id"),
     name: varchar("name"),
     description: jsonb("description"),
-    processed: boolean("processed"),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,
@@ -167,7 +166,6 @@ export const categories = pgTable(
     id: serial("id").primaryKey(),
     bggId: numeric("bgg_id"),
     name: varchar("name"),
-    processed: boolean("processed"),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,
@@ -200,7 +198,7 @@ export const designers = pgTable(
     bggId: numeric("bgg_id"),
     name: varchar("name"),
     description: jsonb("description"),
-    processed: boolean("processed"),
+    processing: boolean("processing").default(true),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,
@@ -550,7 +548,7 @@ export const mechanics = pgTable(
     id: serial("id").primaryKey(),
     bggId: numeric("bgg_id"),
     name: varchar("name"),
-    processed: boolean("processing"),
+    processing: boolean("processing").default(true),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,
@@ -730,10 +728,8 @@ export const types = pgTable(
   "types",
   {
     id: serial("id").primaryKey(),
-    bggId: numeric("bgg_id"),
     name: varchar("name"),
-    description: jsonb("description"),
-    processing: boolean("processing"),
+    processing: boolean("processing").default(true),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,

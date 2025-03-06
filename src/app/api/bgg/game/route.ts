@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchBggGameData } from "@/lib/utils/bggUtils";
+import { fetchBggGameData, extractBggEntityLinks } from "@/lib/utils/bggUtils";
 import { delay } from "@/lib/utils/asyncUtils";
 
 /**
@@ -25,6 +25,17 @@ export async function GET(request: Request) {
 
     // Fetch game data from BGG
     const bggData = await fetchBggGameData(bggId);
+
+    // Extract accessories if present
+    const accessories = extractBggEntityLinks(
+      bggData?.items?.item,
+      "boardgameaccessory"
+    );
+
+    // Add accessories to game data
+    if (accessories && accessories.length > 0) {
+      bggData.accessories = accessories;
+    }
 
     // Return the data
     return NextResponse.json(bggData);
@@ -59,6 +70,17 @@ export async function POST(request: Request) {
 
     // Fetch game data from BGG
     const bggData = await fetchBggGameData(bggId);
+
+    // Extract accessories if present
+    const accessories = extractBggEntityLinks(
+      bggData?.items?.item,
+      "boardgameaccessory"
+    );
+
+    // Add accessories to game data
+    if (accessories && accessories.length > 0) {
+      bggData.accessories = accessories;
+    }
 
     // Return the data
     return NextResponse.json(bggData);

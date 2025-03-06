@@ -395,23 +395,7 @@ export interface Game {
  */
 export interface Type {
   id: number;
-  bggId?: number | null;
   name?: string | null;
-  description?: {
-    root: {
-      type: string;
-      children: {
-        type: string;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
   games?: {
     docs?: (number | Game)[];
     hasNextPage?: boolean;
@@ -1007,9 +991,7 @@ export interface PublishersSelect<T extends boolean = true> {
  * via the `definition` "types_select".
  */
 export interface TypesSelect<T extends boolean = true> {
-  bggId?: T;
   name?: T;
-  description?: T;
   games?: T;
   processing?: T;
   updatedAt?: T;

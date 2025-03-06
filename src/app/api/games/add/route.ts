@@ -2,11 +2,88 @@ import { NextResponse } from "next/server";
 import { getPayload } from "payload";
 import config from "@payload-config";
 import { unlink } from "fs/promises";
-import { Types } from "@/collections/Types";
 import { formatRichText } from "@/lib/utils/formatUtils";
 import { createPayloadFile, downloadImageToTemp } from "@/lib/utils/fileUtils";
 import { delay } from "@/lib/utils/asyncUtils";
 import { extractBggEntityLinks } from "@/lib/utils/bggUtils";
+
+// Create a TypeData interface for operations that include bggId
+interface TypeData {
+  name: string;
+  bggId?: number;
+}
+
+// BGG data interfaces
+interface BGGNameItem {
+  value: string;
+  type?: string;
+  sortindex?: number;
+}
+
+interface BGGLink {
+  id: number;
+  value: string;
+  type?: string;
+}
+
+interface BGGValueItem {
+  value: string | number;
+}
+
+interface BGGPollResult {
+  value: string;
+  numvotes: string | number;
+}
+
+interface BGGPollResultContainer {
+  result: BGGPollResult | BGGPollResult[];
+  numplayers?: string | number;
+}
+
+interface BGGPoll {
+  name: string;
+  title?: string;
+  totalvotes?: number;
+  results: BGGPollResultContainer | BGGPollResultContainer[];
+}
+
+interface BGGRank {
+  id: string;
+  name: string;
+  value: string;
+  type?: string;
+  friendlyname?: string;
+  bayesaverage?: string;
+}
+
+interface BGGRating {
+  average?: BGGValueItem;
+  averageweight?: BGGValueItem;
+  usersrated?: BGGValueItem;
+  ranks?: BGGRank | BGGRank[];
+}
+
+interface BGGStatistics {
+  ratings: BGGRating;
+}
+
+interface BGGGame {
+  id?: number;
+  type?: string;
+  name?: BGGNameItem | BGGNameItem[] | string;
+  description?: string;
+  image?: string;
+  yearpublished?: BGGValueItem;
+  minplayers?: BGGValueItem;
+  maxplayers?: BGGValueItem;
+  playingtime?: BGGValueItem;
+  minplaytime?: BGGValueItem;
+  maxplaytime?: BGGValueItem;
+  minage?: BGGValueItem;
+  statistics?: BGGStatistics;
+  poll?: BGGPoll | BGGPoll[];
+  link?: BGGLink[];
+}
 
 /**
  * Adds a game from BoardGameGeek to the Payload CMS database
@@ -100,6 +177,7 @@ export async function POST(request: Request) {
     const categories = extractBggEntityLinks(bggGame, "boardgamecategory");
     const mechanics = extractBggEntityLinks(bggGame, "boardgamemechanic");
     const artists = extractBggEntityLinks(bggGame, "boardgameartist");
+    const accessories = extractBggEntityLinks(bggGame, "boardgameaccessory");
 
     // Extract expansion information
     const expansions = extractBggEntityLinks(bggGame, "boardgameexpansion");
@@ -129,13 +207,24 @@ export async function POST(request: Request) {
     }
 
     // Create a cache for entities to avoid duplicate lookups
-    const entityCache = {
+    interface EntityCache {
+      publishers: Record<string, number>;
+      designers: Record<string, number>;
+      categories: Record<string, number>;
+      mechanics: Record<string, number>;
+      artists: Record<string, number>;
+      types: Record<string, number>;
+      accessories: Record<string, number>;
+    }
+
+    const entityCache: EntityCache = {
       publishers: {},
       designers: {},
       categories: {},
       mechanics: {},
       artists: {},
       types: {},
+      accessories: {},
     };
 
     // Create or find publishers
@@ -534,18 +623,18 @@ export async function POST(request: Request) {
           entityCache.types[type.value] = typeId;
 
           // Update the type with BGG ID if missing
-          if (type.id && !existingTypes.docs[0].bggId) {
+          if (type.id && !("bggId" in existingTypes.docs[0])) {
             await payload.update({
               collection: "types",
               id: existingTypes.docs[0].id,
               data: {
                 bggId: type.id,
-              },
+              } as TypeData,
             });
           }
         } else {
           // Create new type with BGG ID if available
-          const typeData: { name: string; bggId?: number } = {
+          const typeData: TypeData = {
             name: type.value,
           };
 
@@ -578,10 +667,13 @@ export async function POST(request: Request) {
           if (bggGame.name) {
             if (Array.isArray(bggGame.name) && bggGame.name.length > 0) {
               const primaryName = bggGame.name.find(
-                (n: any) => n.type === "primary"
+                (n: BGGNameItem) => n.type === "primary"
               );
               gameName = primaryName?.value || bggGame.name[0].value;
-            } else if (typeof bggGame.name === "object" && bggGame.name.value) {
+            } else if (
+              typeof bggGame.name === "object" &&
+              "value" in bggGame.name
+            ) {
               gameName = bggGame.name.value;
             } else if (typeof bggGame.name === "string") {
               gameName = bggGame.name;
@@ -611,13 +703,15 @@ export async function POST(request: Request) {
     }
 
     // Helper function to extract game name
-    function extractGameName(bggGame) {
+    function extractGameName(bggGame: BGGGame): string {
       if (!bggGame.name) return "Unknown Game";
 
       if (Array.isArray(bggGame.name) && bggGame.name.length > 0) {
-        const primaryName = bggGame.name.find((n) => n.type === "primary");
+        const primaryName = bggGame.name.find(
+          (n: BGGNameItem) => n.type === "primary"
+        );
         return primaryName?.value || bggGame.name[0].value;
-      } else if (typeof bggGame.name === "object" && bggGame.name.value) {
+      } else if (typeof bggGame.name === "object" && "value" in bggGame.name) {
         return bggGame.name.value;
       } else if (typeof bggGame.name === "string") {
         return bggGame.name;
@@ -641,7 +735,7 @@ export async function POST(request: Request) {
     // Add original name if different from primary name
     if (Array.isArray(bggGame.name) && bggGame.name.length > 1) {
       const alternateNames = bggGame.name.filter(
-        (n: any) => n.type !== "primary"
+        (n: BGGNameItem) => n.type !== "primary"
       );
       if (alternateNames.length > 0) {
         gameData.originalName = alternateNames[0].value;
@@ -674,19 +768,19 @@ export async function POST(request: Request) {
     // Add rating and complexity data
     if (bggGame.statistics?.ratings?.average?.value) {
       gameData.userRating = parseFloat(
-        bggGame.statistics.ratings.average.value
+        bggGame.statistics.ratings.average.value.toString()
       );
     }
 
     if (bggGame.statistics?.ratings?.usersrated?.value) {
       gameData.userRatedCount = parseInt(
-        bggGame.statistics.ratings.usersrated.value
+        bggGame.statistics.ratings.usersrated.value.toString()
       );
     }
 
     if (bggGame.statistics?.ratings?.averageweight?.value) {
       gameData.complexity = parseFloat(
-        bggGame.statistics.ratings.averageweight.value
+        bggGame.statistics.ratings.averageweight.value.toString()
       );
     }
 
@@ -696,7 +790,7 @@ export async function POST(request: Request) {
         : [bggGame.statistics.ratings.ranks];
 
       const overallRank = ranks.find(
-        (r: any) => r.id === "1" || r.name === "boardgame"
+        (r: BGGRank) => r.id === "1" || r.name === "boardgame"
       );
       if (overallRank && overallRank.value !== "Not Ranked") {
         gameData.bggRank = parseInt(overallRank.value);
@@ -707,7 +801,7 @@ export async function POST(request: Request) {
     if (bggGame.poll) {
       const polls = Array.isArray(bggGame.poll) ? bggGame.poll : [bggGame.poll];
       const playerCountPoll = polls.find(
-        (p: any) => p.name === "suggested_numplayers"
+        (p: BGGPoll) => p.name === "suggested_numplayers"
       );
 
       if (playerCountPoll && playerCountPoll.results) {
@@ -715,25 +809,29 @@ export async function POST(request: Request) {
           ? playerCountPoll.results
           : [playerCountPoll.results];
 
-        const suggestedPlayerCount = playerCounts.map((pc: any) => {
-          const votes = pc.result;
-          const voteData = Array.isArray(votes) ? votes : [votes];
+        const suggestedPlayerCount = playerCounts.map(
+          (pc: BGGPollResultContainer) => {
+            const votes = pc.result;
+            const voteData = Array.isArray(votes) ? votes : [votes];
 
-          const bestCount =
-            voteData.find((v: any) => v.value === "Best")?.numvotes || 0;
-          const recommendedCount =
-            voteData.find((v: any) => v.value === "Recommended")?.numvotes || 0;
-          const notRecommendedCount =
-            voteData.find((v: any) => v.value === "Not Recommended")
-              ?.numvotes || 0;
+            const bestCount =
+              voteData.find((v: BGGPollResult) => v.value === "Best")
+                ?.numvotes || 0;
+            const recommendedCount =
+              voteData.find((v: BGGPollResult) => v.value === "Recommended")
+                ?.numvotes || 0;
+            const notRecommendedCount =
+              voteData.find((v: BGGPollResult) => v.value === "Not Recommended")
+                ?.numvotes || 0;
 
-          return {
-            playerCount: parseInt(pc.numplayers),
-            bestCount: parseInt(bestCount),
-            recommendedCount: parseInt(recommendedCount),
-            notRecommendedCount: parseInt(notRecommendedCount),
-          };
-        });
+            return {
+              playerCount: parseInt(pc.numplayers as string),
+              bestCount: parseInt(bestCount as string),
+              recommendedCount: parseInt(recommendedCount as string),
+              notRecommendedCount: parseInt(notRecommendedCount as string),
+            };
+          }
+        );
 
         if (suggestedPlayerCount.length > 0) {
           gameData.suggestedPlayerCount = suggestedPlayerCount;
@@ -742,7 +840,7 @@ export async function POST(request: Request) {
 
       // Get language dependence
       const languagePoll = polls.find(
-        (p: any) => p.name === "language_dependence"
+        (p: BGGPoll) => p.name === "language_dependence"
       );
       if (languagePoll && languagePoll.results) {
         const results = Array.isArray(languagePoll.results.result)
@@ -752,7 +850,8 @@ export async function POST(request: Request) {
         // Find the highest voted language dependence
         if (results.length > 0) {
           const sortedResults = [...results].sort(
-            (a: any, b: any) => parseInt(b.numvotes) - parseInt(a.numvotes)
+            (a: BGGPollResult, b: BGGPollResult) =>
+              parseInt(b.numvotes as string) - parseInt(a.numvotes as string)
           );
 
           const mapping: Record<string, string> = {
@@ -791,6 +890,106 @@ export async function POST(request: Request) {
 
     if (artistIds.length > 0) {
       gameData.artists = artistIds;
+    }
+
+    // Process accessories
+    const accessoryIds = [];
+    if (accessories && Array.isArray(accessories)) {
+      console.log(
+        `Processing ${accessories.length} accessories for game "${gameName}" (BGG ID: ${bggId})`
+      );
+      for (const accessory of accessories) {
+        if (!accessory || !accessory.value) {
+          console.log(`Skipping invalid accessory:`, accessory);
+          continue; // Skip if accessory or accessory.value is undefined
+        }
+
+        console.log(
+          `Processing accessory: ${accessory.value} (ID: ${accessory.id})`
+        );
+
+        // Use cached value if available
+        if (entityCache.accessories[accessory.value]) {
+          accessoryIds.push(entityCache.accessories[accessory.value]);
+          console.log(
+            `Using cached accessory ID for ${accessory.value}: ${entityCache.accessories[accessory.value]}`
+          );
+          continue;
+        }
+
+        // Check if accessory already exists
+        const existingAccessories = await payload.find({
+          collection: "accessories",
+          where: {
+            bggId: {
+              equals: accessory.id,
+            },
+          },
+        });
+
+        if (existingAccessories.docs.length > 0) {
+          // Accessory exists, use its ID
+          const accessoryId = existingAccessories.docs[0].id;
+          accessoryIds.push(accessoryId);
+          entityCache.accessories[accessory.value] = accessoryId;
+          console.log(
+            `Found existing accessory for ${accessory.value}: ${accessoryId}`
+          );
+        } else {
+          // Process the accessory using our dedicated accessory/add endpoint
+          console.log(
+            `Creating new accessory ${accessory.value} (ID: ${accessory.id})`
+          );
+
+          try {
+            // Call our accessories/add endpoint to create the accessory
+            const response = await fetch(`${url.origin}/api/accessories/add`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ accessoryId: accessory.id }),
+            });
+
+            if (!response.ok) {
+              throw new Error(
+                `Failed to add accessory: ${response.statusText}`
+              );
+            }
+
+            const newAccessory = await response.json();
+
+            if (newAccessory?.accessory?.id) {
+              accessoryIds.push(newAccessory.accessory.id);
+              entityCache.accessories[accessory.value] =
+                newAccessory.accessory.id;
+              console.log(
+                `Created new accessory for ${accessory.value}: ${newAccessory.accessory.id}`
+              );
+            } else {
+              console.error(`No accessory ID found in response:`, newAccessory);
+            }
+          } catch (error) {
+            console.error(
+              `Error processing accessory ${accessory.value}:`,
+              error
+            );
+          }
+        }
+      }
+    }
+
+    // Add accessories to game data
+    if (accessoryIds.length > 0) {
+      console.log(
+        `Adding ${accessoryIds.length} accessories to game "${gameName}" (BGG ID: ${bggId}):`,
+        accessoryIds
+      );
+      gameData.accessories = accessoryIds;
+    } else {
+      console.log(
+        `No accessories to add for game "${gameName}" (BGG ID: ${bggId})`
+      );
     }
 
     // Add image reference if available
