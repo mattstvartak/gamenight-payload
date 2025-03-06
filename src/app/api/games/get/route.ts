@@ -12,10 +12,10 @@ interface GetGameResponse {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const bggId = searchParams.get("bggId");
+  const bggId = searchParams.get("id");
 
   if (!bggId) {
-    return NextResponse.json({ error: "BGG ID is required" }, { status: 400 });
+    return NextResponse.json({ error: "Game ID is required" }, { status: 400 });
   }
 
   const payload = await getPayload({ config });

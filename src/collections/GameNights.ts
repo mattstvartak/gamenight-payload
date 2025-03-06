@@ -51,7 +51,15 @@ export const GameNights: CollectionConfig = {
     },
     {
       name: "location",
-      type: "point",
+      type: "text",
+    },
+    {
+      name: "latitude",
+      type: "number",
+    },
+    {
+      name: "longitude",
+      type: "number",
     },
     {
       name: "players",

@@ -589,11 +589,9 @@ export interface Gamenight {
     [k: string]: unknown;
   } | null;
   date?: string | null;
-  /**
-   * @minItems 2
-   * @maxItems 2
-   */
-  location?: [number, number] | null;
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   players?: (number | User)[] | null;
   games?: (number | Game)[] | null;
   recurring?: boolean | null;
@@ -839,6 +837,8 @@ export interface GamenightsSelect<T extends boolean = true> {
   description?: T;
   date?: T;
   location?: T;
+  latitude?: T;
+  longitude?: T;
   players?: T;
   games?: T;
   recurring?: T;

@@ -22,7 +22,6 @@ import {
   pgEnum,
 } from "@payloadcms/db-postgres/drizzle/pg-core";
 import { sql, relations } from "@payloadcms/db-postgres/drizzle";
-import { geometryColumn } from "@payloadcms/db-postgres";
 export const enum_games_language_dependence = pgEnum(
   "enum_games_language_dependence",
   ["0", "1", "2", "3", "4"]
@@ -235,7 +234,9 @@ export const gamenights = pgTable(
       withTimezone: true,
       precision: 3,
     }),
-    location: geometryColumn("location"),
+    location: varchar("location"),
+    latitude: numeric("latitude"),
+    longitude: numeric("longitude"),
     recurring: boolean("recurring").default(false),
     updatedAt: timestamp("updated_at", {
       mode: "string",
