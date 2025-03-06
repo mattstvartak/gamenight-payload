@@ -70,8 +70,8 @@ export default buildConfig({
   },
   db: postgresAdapter({
     pool: {
-      connectionString: process.env.POSTGRES_URL_NON_POOLING
-        ? process.env.POSTGRES_URL_NON_POOLING.replace("?sslmode=require", "")
+      connectionString: process.env.POSTGRES_URL
+        ? process.env.POSTGRES_URL.replace("?sslmode=require", "")
         : "",
     },
   }),
