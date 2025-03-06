@@ -1,16 +1,55 @@
 import type { CollectionConfig } from "payload";
 import { checkRole } from "./access/checkRole";
 import { protectRoles } from "./hooks/protectRoles";
-import { loginAfterCreate } from './hooks/loginAfterCreate';
-import { adminsAndUser } from './access/adminsAndUser';
-import { admins } from './access/admins';
-import { anyone } from './access/anyone';
+import { loginAfterCreate } from "./hooks/loginAfterCreate";
+import { adminsAndUser } from "./access/adminsAndUser";
+import { admins } from "./access/admins";
+import { anyone } from "./access/anyone";
+
 export const Users: CollectionConfig = {
   slug: "users",
   admin: {
     useAsTitle: "email",
   },
-  auth: true,
+  auth: {
+    verify: {
+      generateEmailHTML: ({ token, user }) => {
+        // Create verification URL using your frontend URL
+        const url = `${process.env.NEXT_PUBLIC_SERVER_URL}/verify-email?token=${token}`;
+
+        return `
+          <h1>Verify Your Email</h1>
+          <p>Hello ${user.username || user.email},</p>
+          <p>Please click the link below to verify your email address:</p>
+          <p>
+            <a href="${url}" style="
+              padding: 10px 20px;
+              background-color: #007bff;
+              color: white;
+              text-decoration: none;
+              border-radius: 5px;
+              display: inline-block;
+            ">
+              Verify Email
+            </a>
+          </p>
+          <p>If you didn't request this verification, you can safely ignore this email.</p>
+          <p>This link will expire in 24 hours.</p>
+        `;
+      },
+      generateEmailSubject: ({ user }) => {
+        return `Verify your email for GameNight`;
+      },
+    },
+    maxLoginAttempts: 5,
+    lockTime: 600000, // Lock for 10 minutes
+    useAPIKey: false,
+    cookies: {
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+      domain: process.env.COOKIE_DOMAIN,
+    },
+  },
   access: {
     read: adminsAndUser,
     create: anyone,
@@ -18,7 +57,7 @@ export const Users: CollectionConfig = {
     delete: admins,
     admin: ({ req: { user } }) => {
       if (!user) return false;
-      return checkRole(['admin'], user);
+      return checkRole(["admin"], user);
     },
   },
   hooks: {
@@ -27,22 +66,22 @@ export const Users: CollectionConfig = {
   defaultSort: "username",
   fields: [
     {
-      name: 'roles',
-      type: 'select',
+      name: "roles",
+      type: "select",
       hasMany: true,
       saveToJWT: true,
-      defaultValue: ['user'],
+      defaultValue: ["user"],
       hooks: {
         beforeChange: [protectRoles],
       },
       options: [
         {
-          label: 'Admin',
-          value: 'admin',
+          label: "Admin",
+          value: "admin",
         },
         {
-          label: 'User',
-          value: 'user',
+          label: "User",
+          value: "user",
         },
       ],
     },
@@ -62,8 +101,9 @@ export const Users: CollectionConfig = {
     },
     {
       name: "email",
-        type: "email",
-    required: true,
+      type: "email",
+      required: true,
+      unique: true,
     },
     {
       name: "phone",
@@ -71,54 +111,32 @@ export const Users: CollectionConfig = {
     },
     {
       name: "libraries",
-      type: "array",
-      fields: [
-        {
-          name: "library",
-          type: "relationship",
-          relationTo: "libraries",
-        }
-      ]
+      type: "relationship",
+      relationTo: "libraries",
+      hasMany: true,
     },
     {
       name: "gameNights",
-      type: "array",
-      fields: [
-        {
-          name: "game night",
-          type: "relationship",
-          relationTo: "gamenights",
-        }
-      ]
+      type: "relationship",
+      relationTo: "gamenights",
+      hasMany: true,
     },
     {
       name: "friends",
-      type: "array",
-      fields: [
-        {
-          name: "friend",
-          type: "relationship",
-          relationTo: "users",
-          hasMany: true,
-        }
-      ]
+      type: "relationship",
+      relationTo: "users",
+      hasMany: true,
     },
     {
-      name: "notebooks",
-      type: "array",
-      fields: [
-        {
-          name: "notes",
-          type: "relationship",
-          relationTo: "notes",
-          hasMany: true,
-        }
-      ]
+      name: "notes",
+      type: "relationship",
+      relationTo: "notes",
+      hasMany: true,
     },
     {
       name: "avatar",
       type: "upload",
-      relationTo: "media",
+      relationTo: "usermedia",
       unique: true,
     },
   ],

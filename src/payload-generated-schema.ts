@@ -12,139 +12,477 @@ import {
   uniqueIndex,
   foreignKey,
   integer,
-  serial,
   varchar,
+  serial,
   numeric,
-  timestamp,
   jsonb,
   boolean,
+  timestamp,
+  type AnyPgColumn,
   pgEnum,
 } from "@payloadcms/db-postgres/drizzle/pg-core";
 import { sql, relations } from "@payloadcms/db-postgres/drizzle";
 import { geometryColumn } from "@payloadcms/db-postgres";
+export const enum_games_language_dependence = pgEnum(
+  "enum_games_language_dependence",
+  ["0", "1", "2", "3", "4"]
+);
 export const enum_users_roles = pgEnum("enum_users_roles", ["admin", "user"]);
-export const enum_games_type = pgEnum("enum_games_type", [
-  "boardgame",
-  "videogame",
-  "cardgame",
-  "tabletop",
-  "other",
-]);
 
-export const users_roles = pgTable(
-  "users_roles",
-  {
-    order: integer("order").notNull(),
-    parent: integer("parent_id").notNull(),
-    value: enum_users_roles("value"),
-    id: serial("id").primaryKey(),
-  },
-  (columns) => ({
-    orderIdx: index("users_roles_order_idx").on(columns.order),
-    parentIdx: index("users_roles_parent_idx").on(columns.parent),
-    parentFk: foreignKey({
-      columns: [columns["parent"]],
-      foreignColumns: [users.id],
-      name: "users_roles_parent_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const users_libraries = pgTable(
-  "users_libraries",
+export const accessories_alternate_names = pgTable(
+  "accessories_alternate_names",
   {
     _order: integer("_order").notNull(),
     _parentID: integer("_parent_id").notNull(),
     id: varchar("id").primaryKey(),
-    library: integer("library_id").references(() => libraries.id, {
-      onDelete: "set null",
-    }),
+    name: varchar("name"),
   },
   (columns) => ({
-    _orderIdx: index("users_libraries_order_idx").on(columns._order),
-    _parentIDIdx: index("users_libraries_parent_id_idx").on(columns._parentID),
-    users_libraries_library_idx: index("users_libraries_library_idx").on(
-      columns.library
+    _orderIdx: index("accessories_alternate_names_order_idx").on(
+      columns._order
     ),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [users.id],
-      name: "users_libraries_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const users_game_nights = pgTable(
-  "users_game_nights",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-    "game night": integer("game_night_id").references(() => gamenights.id, {
-      onDelete: "set null",
-    }),
-  },
-  (columns) => ({
-    _orderIdx: index("users_game_nights_order_idx").on(columns._order),
-    _parentIDIdx: index("users_game_nights_parent_id_idx").on(
+    _parentIDIdx: index("accessories_alternate_names_parent_id_idx").on(
       columns._parentID
     ),
-    users_game_nights_game_night_idx: index(
-      "users_game_nights_game_night_idx"
-    ).on(columns["game night"]),
     _parentIDFk: foreignKey({
       columns: [columns["_parentID"]],
-      foreignColumns: [users.id],
-      name: "users_game_nights_parent_id_fk",
+      foreignColumns: [accessories.id],
+      name: "accessories_alternate_names_parent_id_fk",
     }).onDelete("cascade"),
   })
 );
 
-export const users_friends = pgTable(
-  "users_friends",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-  },
-  (columns) => ({
-    _orderIdx: index("users_friends_order_idx").on(columns._order),
-    _parentIDIdx: index("users_friends_parent_id_idx").on(columns._parentID),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [users.id],
-      name: "users_friends_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const users_notebooks = pgTable(
-  "users_notebooks",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-  },
-  (columns) => ({
-    _orderIdx: index("users_notebooks_order_idx").on(columns._order),
-    _parentIDIdx: index("users_notebooks_parent_id_idx").on(columns._parentID),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [users.id],
-      name: "users_notebooks_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const users = pgTable(
-  "users",
+export const accessories = pgTable(
+  "accessories",
   {
     id: serial("id").primaryKey(),
-    username: varchar("username").notNull(),
-    firstName: varchar("first_name"),
-    lastName: varchar("last_name"),
-    phone: numeric("phone"),
-    avatar: integer("avatar_id").references(() => media.id, {
+    bggId: numeric("bgg_id"),
+    name: varchar("name"),
+    description: jsonb("description"),
+    "affiliate link": varchar("affiliate_link"),
+    yearPublished: numeric("year_published"),
+    processing: boolean("processing").default(true),
+    updatedAt: timestamp("updated_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => ({
+    accessories_bgg_id_idx: uniqueIndex("accessories_bgg_id_idx").on(
+      columns.bggId
+    ),
+    accessories_updated_at_idx: index("accessories_updated_at_idx").on(
+      columns.updatedAt
+    ),
+    accessories_created_at_idx: index("accessories_created_at_idx").on(
+      columns.createdAt
+    ),
+  })
+);
+
+export const accessories_rels = pgTable(
+  "accessories_rels",
+  {
+    id: serial("id").primaryKey(),
+    order: integer("order"),
+    parent: integer("parent_id").notNull(),
+    path: varchar("path").notNull(),
+    mediaID: integer("media_id"),
+    publishersID: integer("publishers_id"),
+  },
+  (columns) => ({
+    order: index("accessories_rels_order_idx").on(columns.order),
+    parentIdx: index("accessories_rels_parent_idx").on(columns.parent),
+    pathIdx: index("accessories_rels_path_idx").on(columns.path),
+    accessories_rels_media_id_idx: index("accessories_rels_media_id_idx").on(
+      columns.mediaID
+    ),
+    accessories_rels_publishers_id_idx: index(
+      "accessories_rels_publishers_id_idx"
+    ).on(columns.publishersID),
+    parentFk: foreignKey({
+      columns: [columns["parent"]],
+      foreignColumns: [accessories.id],
+      name: "accessories_rels_parent_fk",
+    }).onDelete("cascade"),
+    mediaIdFk: foreignKey({
+      columns: [columns["mediaID"]],
+      foreignColumns: [media.id],
+      name: "accessories_rels_media_fk",
+    }).onDelete("cascade"),
+    publishersIdFk: foreignKey({
+      columns: [columns["publishersID"]],
+      foreignColumns: [publishers.id],
+      name: "accessories_rels_publishers_fk",
+    }).onDelete("cascade"),
+  })
+);
+
+export const artists = pgTable(
+  "artists",
+  {
+    id: serial("id").primaryKey(),
+    bggId: numeric("bgg_id"),
+    name: varchar("name"),
+    description: jsonb("description"),
+    updatedAt: timestamp("updated_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => ({
+    artists_updated_at_idx: index("artists_updated_at_idx").on(
+      columns.updatedAt
+    ),
+    artists_created_at_idx: index("artists_created_at_idx").on(
+      columns.createdAt
+    ),
+  })
+);
+
+export const categories = pgTable(
+  "categories",
+  {
+    id: serial("id").primaryKey(),
+    bggId: numeric("bgg_id"),
+    name: varchar("name"),
+    updatedAt: timestamp("updated_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => ({
+    categories_updated_at_idx: index("categories_updated_at_idx").on(
+      columns.updatedAt
+    ),
+    categories_created_at_idx: index("categories_created_at_idx").on(
+      columns.createdAt
+    ),
+  })
+);
+
+export const designers = pgTable(
+  "designers",
+  {
+    id: serial("id").primaryKey(),
+    bggId: numeric("bgg_id"),
+    name: varchar("name"),
+    description: jsonb("description"),
+    processing: boolean("processing").default(true),
+    updatedAt: timestamp("updated_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => ({
+    designers_updated_at_idx: index("designers_updated_at_idx").on(
+      columns.updatedAt
+    ),
+    designers_created_at_idx: index("designers_created_at_idx").on(
+      columns.createdAt
+    ),
+  })
+);
+
+export const gamenights = pgTable(
+  "gamenights",
+  {
+    id: serial("id").primaryKey(),
+    name: varchar("name"),
+    description: jsonb("description"),
+    date: timestamp("date", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    }),
+    location: geometryColumn("location"),
+    recurring: boolean("recurring").default(false),
+    updatedAt: timestamp("updated_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => ({
+    gamenights_updated_at_idx: index("gamenights_updated_at_idx").on(
+      columns.updatedAt
+    ),
+    gamenights_created_at_idx: index("gamenights_created_at_idx").on(
+      columns.createdAt
+    ),
+  })
+);
+
+export const gamenights_rels = pgTable(
+  "gamenights_rels",
+  {
+    id: serial("id").primaryKey(),
+    order: integer("order"),
+    parent: integer("parent_id").notNull(),
+    path: varchar("path").notNull(),
+    usersID: integer("users_id"),
+    gamesID: integer("games_id"),
+  },
+  (columns) => ({
+    order: index("gamenights_rels_order_idx").on(columns.order),
+    parentIdx: index("gamenights_rels_parent_idx").on(columns.parent),
+    pathIdx: index("gamenights_rels_path_idx").on(columns.path),
+    gamenights_rels_users_id_idx: index("gamenights_rels_users_id_idx").on(
+      columns.usersID
+    ),
+    gamenights_rels_games_id_idx: index("gamenights_rels_games_id_idx").on(
+      columns.gamesID
+    ),
+    parentFk: foreignKey({
+      columns: [columns["parent"]],
+      foreignColumns: [gamenights.id],
+      name: "gamenights_rels_parent_fk",
+    }).onDelete("cascade"),
+    usersIdFk: foreignKey({
+      columns: [columns["usersID"]],
+      foreignColumns: [users.id],
+      name: "gamenights_rels_users_fk",
+    }).onDelete("cascade"),
+    gamesIdFk: foreignKey({
+      columns: [columns["gamesID"]],
+      foreignColumns: [games.id],
+      name: "gamenights_rels_games_fk",
+    }).onDelete("cascade"),
+  })
+);
+
+export const games_suggested_player_count = pgTable(
+  "games_suggested_player_count",
+  {
+    _order: integer("_order").notNull(),
+    _parentID: integer("_parent_id").notNull(),
+    id: varchar("id").primaryKey(),
+    playerCount: numeric("player_count"),
+    bestCount: numeric("best_count"),
+    recommendedCount: numeric("recommended_count"),
+    notRecommendedCount: numeric("not_recommended_count"),
+  },
+  (columns) => ({
+    _orderIdx: index("games_suggested_player_count_order_idx").on(
+      columns._order
+    ),
+    _parentIDIdx: index("games_suggested_player_count_parent_id_idx").on(
+      columns._parentID
+    ),
+    _parentIDFk: foreignKey({
+      columns: [columns["_parentID"]],
+      foreignColumns: [games.id],
+      name: "games_suggested_player_count_parent_id_fk",
+    }).onDelete("cascade"),
+  })
+);
+
+export const games = pgTable(
+  "games",
+  {
+    id: serial("id").primaryKey(),
+    bggId: numeric("bgg_id"),
+    name: varchar("name"),
+    originalName: varchar("original_name"),
+    description: jsonb("description"),
+    "affiliate link": varchar("affiliate_link"),
+    yearPublished: numeric("year_published"),
+    minPlayers: numeric("min_players"),
+    maxPlayers: numeric("max_players"),
+    playingTime: numeric("playing_time"),
+    minPlaytime: numeric("min_playtime"),
+    maxPlaytime: numeric("max_playtime"),
+    minAge: numeric("min_age"),
+    complexity: numeric("complexity"),
+    userRating: numeric("user_rating"),
+    userRatedCount: numeric("user_rated_count"),
+    "official link": varchar("official_link"),
+    bggRank: numeric("bgg_rank"),
+    baseGame: integer("base_game_id").references((): AnyPgColumn => games.id, {
+      onDelete: "set null",
+    }),
+    languageDependence: enum_games_language_dependence("language_dependence"),
+    processing: boolean("processing").default(true),
+    updatedAt: timestamp("updated_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => ({
+    games_bgg_id_idx: uniqueIndex("games_bgg_id_idx").on(columns.bggId),
+    games_base_game_idx: index("games_base_game_idx").on(columns.baseGame),
+    games_updated_at_idx: index("games_updated_at_idx").on(columns.updatedAt),
+    games_created_at_idx: index("games_created_at_idx").on(columns.createdAt),
+  })
+);
+
+export const games_rels = pgTable(
+  "games_rels",
+  {
+    id: serial("id").primaryKey(),
+    order: integer("order"),
+    parent: integer("parent_id").notNull(),
+    path: varchar("path").notNull(),
+    mediaID: integer("media_id"),
+    typesID: integer("types_id"),
+    categoriesID: integer("categories_id"),
+    mechanicsID: integer("mechanics_id"),
+    designersID: integer("designers_id"),
+    publishersID: integer("publishers_id"),
+    artistsID: integer("artists_id"),
+    gamesID: integer("games_id"),
+    accessoriesID: integer("accessories_id"),
+  },
+  (columns) => ({
+    order: index("games_rels_order_idx").on(columns.order),
+    parentIdx: index("games_rels_parent_idx").on(columns.parent),
+    pathIdx: index("games_rels_path_idx").on(columns.path),
+    games_rels_media_id_idx: index("games_rels_media_id_idx").on(
+      columns.mediaID
+    ),
+    games_rels_types_id_idx: index("games_rels_types_id_idx").on(
+      columns.typesID
+    ),
+    games_rels_categories_id_idx: index("games_rels_categories_id_idx").on(
+      columns.categoriesID
+    ),
+    games_rels_mechanics_id_idx: index("games_rels_mechanics_id_idx").on(
+      columns.mechanicsID
+    ),
+    games_rels_designers_id_idx: index("games_rels_designers_id_idx").on(
+      columns.designersID
+    ),
+    games_rels_publishers_id_idx: index("games_rels_publishers_id_idx").on(
+      columns.publishersID
+    ),
+    games_rels_artists_id_idx: index("games_rels_artists_id_idx").on(
+      columns.artistsID
+    ),
+    games_rels_games_id_idx: index("games_rels_games_id_idx").on(
+      columns.gamesID
+    ),
+    games_rels_accessories_id_idx: index("games_rels_accessories_id_idx").on(
+      columns.accessoriesID
+    ),
+    parentFk: foreignKey({
+      columns: [columns["parent"]],
+      foreignColumns: [games.id],
+      name: "games_rels_parent_fk",
+    }).onDelete("cascade"),
+    mediaIdFk: foreignKey({
+      columns: [columns["mediaID"]],
+      foreignColumns: [media.id],
+      name: "games_rels_media_fk",
+    }).onDelete("cascade"),
+    typesIdFk: foreignKey({
+      columns: [columns["typesID"]],
+      foreignColumns: [types.id],
+      name: "games_rels_types_fk",
+    }).onDelete("cascade"),
+    categoriesIdFk: foreignKey({
+      columns: [columns["categoriesID"]],
+      foreignColumns: [categories.id],
+      name: "games_rels_categories_fk",
+    }).onDelete("cascade"),
+    mechanicsIdFk: foreignKey({
+      columns: [columns["mechanicsID"]],
+      foreignColumns: [mechanics.id],
+      name: "games_rels_mechanics_fk",
+    }).onDelete("cascade"),
+    designersIdFk: foreignKey({
+      columns: [columns["designersID"]],
+      foreignColumns: [designers.id],
+      name: "games_rels_designers_fk",
+    }).onDelete("cascade"),
+    publishersIdFk: foreignKey({
+      columns: [columns["publishersID"]],
+      foreignColumns: [publishers.id],
+      name: "games_rels_publishers_fk",
+    }).onDelete("cascade"),
+    artistsIdFk: foreignKey({
+      columns: [columns["artistsID"]],
+      foreignColumns: [artists.id],
+      name: "games_rels_artists_fk",
+    }).onDelete("cascade"),
+    gamesIdFk: foreignKey({
+      columns: [columns["gamesID"]],
+      foreignColumns: [games.id],
+      name: "games_rels_games_fk",
+    }).onDelete("cascade"),
+    accessoriesIdFk: foreignKey({
+      columns: [columns["accessoriesID"]],
+      foreignColumns: [accessories.id],
+      name: "games_rels_accessories_fk",
+    }).onDelete("cascade"),
+  })
+);
+
+export const libraries = pgTable(
+  "libraries",
+  {
+    id: serial("id").primaryKey(),
+    name: varchar("name"),
+    description: jsonb("description"),
+    createdBy: integer("created_by_id").references(() => users.id, {
       onDelete: "set null",
     }),
     updatedAt: timestamp("updated_at", {
@@ -161,66 +499,78 @@ export const users = pgTable(
     })
       .defaultNow()
       .notNull(),
-    email: varchar("email").notNull(),
-    resetPasswordToken: varchar("reset_password_token"),
-    resetPasswordExpiration: timestamp("reset_password_expiration", {
-      mode: "string",
-      withTimezone: true,
-      precision: 3,
-    }),
-    salt: varchar("salt"),
-    hash: varchar("hash"),
-    loginAttempts: numeric("login_attempts").default("0"),
-    lockUntil: timestamp("lock_until", {
-      mode: "string",
-      withTimezone: true,
-      precision: 3,
-    }),
   },
   (columns) => ({
-    users_username_idx: uniqueIndex("users_username_idx").on(columns.username),
-    users_avatar_idx: uniqueIndex("users_avatar_idx").on(columns.avatar),
-    users_updated_at_idx: index("users_updated_at_idx").on(columns.updatedAt),
-    users_created_at_idx: index("users_created_at_idx").on(columns.createdAt),
-    users_email_idx: uniqueIndex("users_email_idx").on(columns.email),
+    libraries_created_by_idx: index("libraries_created_by_idx").on(
+      columns.createdBy
+    ),
+    libraries_updated_at_idx: index("libraries_updated_at_idx").on(
+      columns.updatedAt
+    ),
+    libraries_created_at_idx: index("libraries_created_at_idx").on(
+      columns.createdAt
+    ),
   })
 );
 
-export const users_rels = pgTable(
-  "users_rels",
+export const libraries_rels = pgTable(
+  "libraries_rels",
   {
     id: serial("id").primaryKey(),
     order: integer("order"),
     parent: integer("parent_id").notNull(),
     path: varchar("path").notNull(),
-    usersID: integer("users_id"),
-    notesID: integer("notes_id"),
+    gamesID: integer("games_id"),
   },
   (columns) => ({
-    order: index("users_rels_order_idx").on(columns.order),
-    parentIdx: index("users_rels_parent_idx").on(columns.parent),
-    pathIdx: index("users_rels_path_idx").on(columns.path),
-    users_rels_users_id_idx: index("users_rels_users_id_idx").on(
-      columns.usersID
-    ),
-    users_rels_notes_id_idx: index("users_rels_notes_id_idx").on(
-      columns.notesID
+    order: index("libraries_rels_order_idx").on(columns.order),
+    parentIdx: index("libraries_rels_parent_idx").on(columns.parent),
+    pathIdx: index("libraries_rels_path_idx").on(columns.path),
+    libraries_rels_games_id_idx: index("libraries_rels_games_id_idx").on(
+      columns.gamesID
     ),
     parentFk: foreignKey({
       columns: [columns["parent"]],
-      foreignColumns: [users.id],
-      name: "users_rels_parent_fk",
+      foreignColumns: [libraries.id],
+      name: "libraries_rels_parent_fk",
     }).onDelete("cascade"),
-    usersIdFk: foreignKey({
-      columns: [columns["usersID"]],
-      foreignColumns: [users.id],
-      name: "users_rels_users_fk",
+    gamesIdFk: foreignKey({
+      columns: [columns["gamesID"]],
+      foreignColumns: [games.id],
+      name: "libraries_rels_games_fk",
     }).onDelete("cascade"),
-    notesIdFk: foreignKey({
-      columns: [columns["notesID"]],
-      foreignColumns: [notes.id],
-      name: "users_rels_notes_fk",
-    }).onDelete("cascade"),
+  })
+);
+
+export const mechanics = pgTable(
+  "mechanics",
+  {
+    id: serial("id").primaryKey(),
+    bggId: numeric("bgg_id"),
+    name: varchar("name"),
+    processing: boolean("processing").default(true),
+    updatedAt: timestamp("updated_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => ({
+    mechanics_updated_at_idx: index("mechanics_updated_at_idx").on(
+      columns.updatedAt
+    ),
+    mechanics_created_at_idx: index("mechanics_created_at_idx").on(
+      columns.createdAt
+    ),
   })
 );
 
@@ -229,8 +579,6 @@ export const media = pgTable(
   {
     id: serial("id").primaryKey(),
     alt: varchar("alt").notNull(),
-    gameId: varchar("game_id"),
-    gameName: varchar("game_name"),
     prefix: varchar("prefix").default("games"),
     updatedAt: timestamp("updated_at", {
       mode: "string",
@@ -281,61 +629,6 @@ export const media = pgTable(
   })
 );
 
-export const libraries_games = pgTable(
-  "libraries_games",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-    game: integer("game_id").references(() => games.id, {
-      onDelete: "set null",
-    }),
-  },
-  (columns) => ({
-    _orderIdx: index("libraries_games_order_idx").on(columns._order),
-    _parentIDIdx: index("libraries_games_parent_id_idx").on(columns._parentID),
-    libraries_games_game_idx: index("libraries_games_game_idx").on(
-      columns.game
-    ),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [libraries.id],
-      name: "libraries_games_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const libraries = pgTable(
-  "libraries",
-  {
-    id: serial("id").primaryKey(),
-    name: varchar("name"),
-    description: varchar("description"),
-    updatedAt: timestamp("updated_at", {
-      mode: "string",
-      withTimezone: true,
-      precision: 3,
-    })
-      .defaultNow()
-      .notNull(),
-    createdAt: timestamp("created_at", {
-      mode: "string",
-      withTimezone: true,
-      precision: 3,
-    })
-      .defaultNow()
-      .notNull(),
-  },
-  (columns) => ({
-    libraries_updated_at_idx: index("libraries_updated_at_idx").on(
-      columns.updatedAt
-    ),
-    libraries_created_at_idx: index("libraries_created_at_idx").on(
-      columns.createdAt
-    ),
-  })
-);
-
 export const notes = pgTable(
   "notes",
   {
@@ -369,69 +662,14 @@ export const notes = pgTable(
   })
 );
 
-export const gamenights_players = pgTable(
-  "gamenights_players",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-    player: integer("player_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
-  },
-  (columns) => ({
-    _orderIdx: index("gamenights_players_order_idx").on(columns._order),
-    _parentIDIdx: index("gamenights_players_parent_id_idx").on(
-      columns._parentID
-    ),
-    gamenights_players_player_idx: index("gamenights_players_player_idx").on(
-      columns.player
-    ),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [gamenights.id],
-      name: "gamenights_players_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const gamenights_games = pgTable(
-  "gamenights_games",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-    game: integer("game_id").references(() => games.id, {
-      onDelete: "set null",
-    }),
-  },
-  (columns) => ({
-    _orderIdx: index("gamenights_games_order_idx").on(columns._order),
-    _parentIDIdx: index("gamenights_games_parent_id_idx").on(columns._parentID),
-    gamenights_games_game_idx: index("gamenights_games_game_idx").on(
-      columns.game
-    ),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [gamenights.id],
-      name: "gamenights_games_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const gamenights = pgTable(
-  "gamenights",
+export const publishers = pgTable(
+  "publishers",
   {
     id: serial("id").primaryKey(),
+    bggId: numeric("bgg_id"),
     name: varchar("name"),
     description: jsonb("description"),
-    date: timestamp("date", {
-      mode: "string",
-      withTimezone: true,
-      precision: 3,
-    }),
-    location: geometryColumn("location"),
-    recurring: boolean("recurring").default(false),
+    processing: boolean("processing").default(true),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,
@@ -448,102 +686,50 @@ export const gamenights = pgTable(
       .notNull(),
   },
   (columns) => ({
-    gamenights_updated_at_idx: index("gamenights_updated_at_idx").on(
+    publishers_updated_at_idx: index("publishers_updated_at_idx").on(
       columns.updatedAt
     ),
-    gamenights_created_at_idx: index("gamenights_created_at_idx").on(
+    publishers_created_at_idx: index("publishers_created_at_idx").on(
       columns.createdAt
     ),
   })
 );
 
-export const games_images = pgTable(
-  "games_images",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-    image: integer("image_id").references(() => media.id, {
-      onDelete: "set null",
-    }),
-  },
-  (columns) => ({
-    _orderIdx: index("games_images_order_idx").on(columns._order),
-    _parentIDIdx: index("games_images_parent_id_idx").on(columns._parentID),
-    games_images_image_idx: index("games_images_image_idx").on(columns.image),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [games.id],
-      name: "games_images_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const games_categories = pgTable(
-  "games_categories",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-    category: integer("category_id").references(() => categories.id, {
-      onDelete: "set null",
-    }),
-  },
-  (columns) => ({
-    _orderIdx: index("games_categories_order_idx").on(columns._order),
-    _parentIDIdx: index("games_categories_parent_id_idx").on(columns._parentID),
-    games_categories_category_idx: index("games_categories_category_idx").on(
-      columns.category
-    ),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [games.id],
-      name: "games_categories_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const games_mechanics = pgTable(
-  "games_mechanics",
-  {
-    _order: integer("_order").notNull(),
-    _parentID: integer("_parent_id").notNull(),
-    id: varchar("id").primaryKey(),
-    mechanic: integer("mechanic_id").references(() => mechanics.id, {
-      onDelete: "set null",
-    }),
-  },
-  (columns) => ({
-    _orderIdx: index("games_mechanics_order_idx").on(columns._order),
-    _parentIDIdx: index("games_mechanics_parent_id_idx").on(columns._parentID),
-    games_mechanics_mechanic_idx: index("games_mechanics_mechanic_idx").on(
-      columns.mechanic
-    ),
-    _parentIDFk: foreignKey({
-      columns: [columns["_parentID"]],
-      foreignColumns: [games.id],
-      name: "games_mechanics_parent_id_fk",
-    }).onDelete("cascade"),
-  })
-);
-
-export const games = pgTable(
-  "games",
+export const publishers_rels = pgTable(
+  "publishers_rels",
   {
     id: serial("id").primaryKey(),
-    bggId: varchar("bgg_id"),
+    order: integer("order"),
+    parent: integer("parent_id").notNull(),
+    path: varchar("path").notNull(),
+    mediaID: integer("media_id"),
+  },
+  (columns) => ({
+    order: index("publishers_rels_order_idx").on(columns.order),
+    parentIdx: index("publishers_rels_parent_idx").on(columns.parent),
+    pathIdx: index("publishers_rels_path_idx").on(columns.path),
+    publishers_rels_media_id_idx: index("publishers_rels_media_id_idx").on(
+      columns.mediaID
+    ),
+    parentFk: foreignKey({
+      columns: [columns["parent"]],
+      foreignColumns: [publishers.id],
+      name: "publishers_rels_parent_fk",
+    }).onDelete("cascade"),
+    mediaIdFk: foreignKey({
+      columns: [columns["mediaID"]],
+      foreignColumns: [media.id],
+      name: "publishers_rels_media_fk",
+    }).onDelete("cascade"),
+  })
+);
+
+export const types = pgTable(
+  "types",
+  {
+    id: serial("id").primaryKey(),
     name: varchar("name"),
-    description: varchar("description"),
-    "affiliate link": varchar("affiliate_link"),
-    type: enum_games_type("type"),
-    yearPublished: numeric("year_published"),
-    minPlayers: numeric("min_players"),
-    maxPlayers: numeric("max_players"),
-    minPlaytime: numeric("min_playtime"),
-    maxPlaytime: numeric("max_playtime"),
-    minAge: numeric("min_age"),
-    complexity: numeric("complexity"),
-    "official link": varchar("official_link"),
+    processing: boolean("processing").default(true),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,
@@ -560,17 +746,19 @@ export const games = pgTable(
       .notNull(),
   },
   (columns) => ({
-    games_bgg_id_idx: uniqueIndex("games_bgg_id_idx").on(columns.bggId),
-    games_updated_at_idx: index("games_updated_at_idx").on(columns.updatedAt),
-    games_created_at_idx: index("games_created_at_idx").on(columns.createdAt),
+    types_updated_at_idx: index("types_updated_at_idx").on(columns.updatedAt),
+    types_created_at_idx: index("types_created_at_idx").on(columns.createdAt),
   })
 );
 
-export const categories = pgTable(
-  "categories",
+export const usermedia = pgTable(
+  "usermedia",
   {
     id: serial("id").primaryKey(),
-    name: varchar("name"),
+    alt: varchar("alt").notNull(),
+    gameId: varchar("game_id"),
+    gameName: varchar("game_name"),
+    prefix: varchar("prefix").default("usermedia"),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,
@@ -585,22 +773,77 @@ export const categories = pgTable(
     })
       .defaultNow()
       .notNull(),
+    url: varchar("url"),
+    thumbnailURL: varchar("thumbnail_u_r_l"),
+    filename: varchar("filename"),
+    mimeType: varchar("mime_type"),
+    filesize: numeric("filesize"),
+    width: numeric("width"),
+    height: numeric("height"),
+    focalX: numeric("focal_x"),
+    focalY: numeric("focal_y"),
+    sizes_thumbnail_url: varchar("sizes_thumbnail_url"),
+    sizes_thumbnail_width: numeric("sizes_thumbnail_width"),
+    sizes_thumbnail_height: numeric("sizes_thumbnail_height"),
+    sizes_thumbnail_mimeType: varchar("sizes_thumbnail_mime_type"),
+    sizes_thumbnail_filesize: numeric("sizes_thumbnail_filesize"),
+    sizes_thumbnail_filename: varchar("sizes_thumbnail_filename"),
+    sizes_card_url: varchar("sizes_card_url"),
+    sizes_card_width: numeric("sizes_card_width"),
+    sizes_card_height: numeric("sizes_card_height"),
+    sizes_card_mimeType: varchar("sizes_card_mime_type"),
+    sizes_card_filesize: numeric("sizes_card_filesize"),
+    sizes_card_filename: varchar("sizes_card_filename"),
   },
   (columns) => ({
-    categories_updated_at_idx: index("categories_updated_at_idx").on(
+    usermedia_updated_at_idx: index("usermedia_updated_at_idx").on(
       columns.updatedAt
     ),
-    categories_created_at_idx: index("categories_created_at_idx").on(
+    usermedia_created_at_idx: index("usermedia_created_at_idx").on(
       columns.createdAt
     ),
+    usermedia_filename_idx: uniqueIndex("usermedia_filename_idx").on(
+      columns.filename
+    ),
+    usermedia_sizes_thumbnail_sizes_thumbnail_filename_idx: index(
+      "usermedia_sizes_thumbnail_sizes_thumbnail_filename_idx"
+    ).on(columns.sizes_thumbnail_filename),
+    usermedia_sizes_card_sizes_card_filename_idx: index(
+      "usermedia_sizes_card_sizes_card_filename_idx"
+    ).on(columns.sizes_card_filename),
   })
 );
 
-export const mechanics = pgTable(
-  "mechanics",
+export const users_roles = pgTable(
+  "users_roles",
+  {
+    order: integer("order").notNull(),
+    parent: integer("parent_id").notNull(),
+    value: enum_users_roles("value"),
+    id: serial("id").primaryKey(),
+  },
+  (columns) => ({
+    orderIdx: index("users_roles_order_idx").on(columns.order),
+    parentIdx: index("users_roles_parent_idx").on(columns.parent),
+    parentFk: foreignKey({
+      columns: [columns["parent"]],
+      foreignColumns: [users.id],
+      name: "users_roles_parent_fk",
+    }).onDelete("cascade"),
+  })
+);
+
+export const users = pgTable(
+  "users",
   {
     id: serial("id").primaryKey(),
-    name: varchar("name"),
+    username: varchar("username").notNull(),
+    firstName: varchar("first_name"),
+    lastName: varchar("last_name"),
+    phone: numeric("phone"),
+    avatar: integer("avatar_id").references(() => usermedia.id, {
+      onDelete: "set null",
+    }),
     updatedAt: timestamp("updated_at", {
       mode: "string",
       withTimezone: true,
@@ -615,14 +858,86 @@ export const mechanics = pgTable(
     })
       .defaultNow()
       .notNull(),
+    email: varchar("email").notNull(),
+    resetPasswordToken: varchar("reset_password_token"),
+    resetPasswordExpiration: timestamp("reset_password_expiration", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    }),
+    salt: varchar("salt"),
+    hash: varchar("hash"),
+    _verified: boolean("_verified"),
+    _verificationToken: varchar("_verificationtoken"),
+    loginAttempts: numeric("login_attempts").default("0"),
+    lockUntil: timestamp("lock_until", {
+      mode: "string",
+      withTimezone: true,
+      precision: 3,
+    }),
   },
   (columns) => ({
-    mechanics_updated_at_idx: index("mechanics_updated_at_idx").on(
-      columns.updatedAt
+    users_username_idx: uniqueIndex("users_username_idx").on(columns.username),
+    users_avatar_idx: uniqueIndex("users_avatar_idx").on(columns.avatar),
+    users_updated_at_idx: index("users_updated_at_idx").on(columns.updatedAt),
+    users_created_at_idx: index("users_created_at_idx").on(columns.createdAt),
+    users_email_idx: uniqueIndex("users_email_idx").on(columns.email),
+  })
+);
+
+export const users_rels = pgTable(
+  "users_rels",
+  {
+    id: serial("id").primaryKey(),
+    order: integer("order"),
+    parent: integer("parent_id").notNull(),
+    path: varchar("path").notNull(),
+    librariesID: integer("libraries_id"),
+    gamenightsID: integer("gamenights_id"),
+    usersID: integer("users_id"),
+    notesID: integer("notes_id"),
+  },
+  (columns) => ({
+    order: index("users_rels_order_idx").on(columns.order),
+    parentIdx: index("users_rels_parent_idx").on(columns.parent),
+    pathIdx: index("users_rels_path_idx").on(columns.path),
+    users_rels_libraries_id_idx: index("users_rels_libraries_id_idx").on(
+      columns.librariesID
     ),
-    mechanics_created_at_idx: index("mechanics_created_at_idx").on(
-      columns.createdAt
+    users_rels_gamenights_id_idx: index("users_rels_gamenights_id_idx").on(
+      columns.gamenightsID
     ),
+    users_rels_users_id_idx: index("users_rels_users_id_idx").on(
+      columns.usersID
+    ),
+    users_rels_notes_id_idx: index("users_rels_notes_id_idx").on(
+      columns.notesID
+    ),
+    parentFk: foreignKey({
+      columns: [columns["parent"]],
+      foreignColumns: [users.id],
+      name: "users_rels_parent_fk",
+    }).onDelete("cascade"),
+    librariesIdFk: foreignKey({
+      columns: [columns["librariesID"]],
+      foreignColumns: [libraries.id],
+      name: "users_rels_libraries_fk",
+    }).onDelete("cascade"),
+    gamenightsIdFk: foreignKey({
+      columns: [columns["gamenightsID"]],
+      foreignColumns: [gamenights.id],
+      name: "users_rels_gamenights_fk",
+    }).onDelete("cascade"),
+    usersIdFk: foreignKey({
+      columns: [columns["usersID"]],
+      foreignColumns: [users.id],
+      name: "users_rels_users_fk",
+    }).onDelete("cascade"),
+    notesIdFk: foreignKey({
+      columns: [columns["notesID"]],
+      foreignColumns: [notes.id],
+      name: "users_rels_notes_fk",
+    }).onDelete("cascade"),
   })
 );
 
@@ -666,14 +981,20 @@ export const payload_locked_documents_rels = pgTable(
     order: integer("order"),
     parent: integer("parent_id").notNull(),
     path: varchar("path").notNull(),
-    usersID: integer("users_id"),
-    mediaID: integer("media_id"),
-    librariesID: integer("libraries_id"),
-    notesID: integer("notes_id"),
+    accessoriesID: integer("accessories_id"),
+    artistsID: integer("artists_id"),
+    categoriesID: integer("categories_id"),
+    designersID: integer("designers_id"),
     gamenightsID: integer("gamenights_id"),
     gamesID: integer("games_id"),
-    categoriesID: integer("categories_id"),
+    librariesID: integer("libraries_id"),
     mechanicsID: integer("mechanics_id"),
+    mediaID: integer("media_id"),
+    notesID: integer("notes_id"),
+    publishersID: integer("publishers_id"),
+    typesID: integer("types_id"),
+    usermediaID: integer("usermedia_id"),
+    usersID: integer("users_id"),
   },
   (columns) => ({
     order: index("payload_locked_documents_rels_order_idx").on(columns.order),
@@ -681,54 +1002,72 @@ export const payload_locked_documents_rels = pgTable(
       columns.parent
     ),
     pathIdx: index("payload_locked_documents_rels_path_idx").on(columns.path),
-    payload_locked_documents_rels_users_id_idx: index(
-      "payload_locked_documents_rels_users_id_idx"
-    ).on(columns.usersID),
-    payload_locked_documents_rels_media_id_idx: index(
-      "payload_locked_documents_rels_media_id_idx"
-    ).on(columns.mediaID),
-    payload_locked_documents_rels_libraries_id_idx: index(
-      "payload_locked_documents_rels_libraries_id_idx"
-    ).on(columns.librariesID),
-    payload_locked_documents_rels_notes_id_idx: index(
-      "payload_locked_documents_rels_notes_id_idx"
-    ).on(columns.notesID),
+    payload_locked_documents_rels_accessories_id_idx: index(
+      "payload_locked_documents_rels_accessories_id_idx"
+    ).on(columns.accessoriesID),
+    payload_locked_documents_rels_artists_id_idx: index(
+      "payload_locked_documents_rels_artists_id_idx"
+    ).on(columns.artistsID),
+    payload_locked_documents_rels_categories_id_idx: index(
+      "payload_locked_documents_rels_categories_id_idx"
+    ).on(columns.categoriesID),
+    payload_locked_documents_rels_designers_id_idx: index(
+      "payload_locked_documents_rels_designers_id_idx"
+    ).on(columns.designersID),
     payload_locked_documents_rels_gamenights_id_idx: index(
       "payload_locked_documents_rels_gamenights_id_idx"
     ).on(columns.gamenightsID),
     payload_locked_documents_rels_games_id_idx: index(
       "payload_locked_documents_rels_games_id_idx"
     ).on(columns.gamesID),
-    payload_locked_documents_rels_categories_id_idx: index(
-      "payload_locked_documents_rels_categories_id_idx"
-    ).on(columns.categoriesID),
+    payload_locked_documents_rels_libraries_id_idx: index(
+      "payload_locked_documents_rels_libraries_id_idx"
+    ).on(columns.librariesID),
     payload_locked_documents_rels_mechanics_id_idx: index(
       "payload_locked_documents_rels_mechanics_id_idx"
     ).on(columns.mechanicsID),
+    payload_locked_documents_rels_media_id_idx: index(
+      "payload_locked_documents_rels_media_id_idx"
+    ).on(columns.mediaID),
+    payload_locked_documents_rels_notes_id_idx: index(
+      "payload_locked_documents_rels_notes_id_idx"
+    ).on(columns.notesID),
+    payload_locked_documents_rels_publishers_id_idx: index(
+      "payload_locked_documents_rels_publishers_id_idx"
+    ).on(columns.publishersID),
+    payload_locked_documents_rels_types_id_idx: index(
+      "payload_locked_documents_rels_types_id_idx"
+    ).on(columns.typesID),
+    payload_locked_documents_rels_usermedia_id_idx: index(
+      "payload_locked_documents_rels_usermedia_id_idx"
+    ).on(columns.usermediaID),
+    payload_locked_documents_rels_users_id_idx: index(
+      "payload_locked_documents_rels_users_id_idx"
+    ).on(columns.usersID),
     parentFk: foreignKey({
       columns: [columns["parent"]],
       foreignColumns: [payload_locked_documents.id],
       name: "payload_locked_documents_rels_parent_fk",
     }).onDelete("cascade"),
-    usersIdFk: foreignKey({
-      columns: [columns["usersID"]],
-      foreignColumns: [users.id],
-      name: "payload_locked_documents_rels_users_fk",
+    accessoriesIdFk: foreignKey({
+      columns: [columns["accessoriesID"]],
+      foreignColumns: [accessories.id],
+      name: "payload_locked_documents_rels_accessories_fk",
     }).onDelete("cascade"),
-    mediaIdFk: foreignKey({
-      columns: [columns["mediaID"]],
-      foreignColumns: [media.id],
-      name: "payload_locked_documents_rels_media_fk",
+    artistsIdFk: foreignKey({
+      columns: [columns["artistsID"]],
+      foreignColumns: [artists.id],
+      name: "payload_locked_documents_rels_artists_fk",
     }).onDelete("cascade"),
-    librariesIdFk: foreignKey({
-      columns: [columns["librariesID"]],
-      foreignColumns: [libraries.id],
-      name: "payload_locked_documents_rels_libraries_fk",
+    categoriesIdFk: foreignKey({
+      columns: [columns["categoriesID"]],
+      foreignColumns: [categories.id],
+      name: "payload_locked_documents_rels_categories_fk",
     }).onDelete("cascade"),
-    notesIdFk: foreignKey({
-      columns: [columns["notesID"]],
-      foreignColumns: [notes.id],
-      name: "payload_locked_documents_rels_notes_fk",
+    designersIdFk: foreignKey({
+      columns: [columns["designersID"]],
+      foreignColumns: [designers.id],
+      name: "payload_locked_documents_rels_designers_fk",
     }).onDelete("cascade"),
     gamenightsIdFk: foreignKey({
       columns: [columns["gamenightsID"]],
@@ -740,15 +1079,45 @@ export const payload_locked_documents_rels = pgTable(
       foreignColumns: [games.id],
       name: "payload_locked_documents_rels_games_fk",
     }).onDelete("cascade"),
-    categoriesIdFk: foreignKey({
-      columns: [columns["categoriesID"]],
-      foreignColumns: [categories.id],
-      name: "payload_locked_documents_rels_categories_fk",
+    librariesIdFk: foreignKey({
+      columns: [columns["librariesID"]],
+      foreignColumns: [libraries.id],
+      name: "payload_locked_documents_rels_libraries_fk",
     }).onDelete("cascade"),
     mechanicsIdFk: foreignKey({
       columns: [columns["mechanicsID"]],
       foreignColumns: [mechanics.id],
       name: "payload_locked_documents_rels_mechanics_fk",
+    }).onDelete("cascade"),
+    mediaIdFk: foreignKey({
+      columns: [columns["mediaID"]],
+      foreignColumns: [media.id],
+      name: "payload_locked_documents_rels_media_fk",
+    }).onDelete("cascade"),
+    notesIdFk: foreignKey({
+      columns: [columns["notesID"]],
+      foreignColumns: [notes.id],
+      name: "payload_locked_documents_rels_notes_fk",
+    }).onDelete("cascade"),
+    publishersIdFk: foreignKey({
+      columns: [columns["publishersID"]],
+      foreignColumns: [publishers.id],
+      name: "payload_locked_documents_rels_publishers_fk",
+    }).onDelete("cascade"),
+    typesIdFk: foreignKey({
+      columns: [columns["typesID"]],
+      foreignColumns: [types.id],
+      name: "payload_locked_documents_rels_types_fk",
+    }).onDelete("cascade"),
+    usermediaIdFk: foreignKey({
+      columns: [columns["usermediaID"]],
+      foreignColumns: [usermedia.id],
+      name: "payload_locked_documents_rels_usermedia_fk",
+    }).onDelete("cascade"),
+    usersIdFk: foreignKey({
+      columns: [columns["usersID"]],
+      foreignColumns: [users.id],
+      name: "payload_locked_documents_rels_users_fk",
     }).onDelete("cascade"),
   })
 );
@@ -847,6 +1216,203 @@ export const payload_migrations = pgTable(
   })
 );
 
+export const relations_accessories_alternate_names = relations(
+  accessories_alternate_names,
+  ({ one }) => ({
+    _parentID: one(accessories, {
+      fields: [accessories_alternate_names._parentID],
+      references: [accessories.id],
+      relationName: "alternateNames",
+    }),
+  })
+);
+export const relations_accessories_rels = relations(
+  accessories_rels,
+  ({ one }) => ({
+    parent: one(accessories, {
+      fields: [accessories_rels.parent],
+      references: [accessories.id],
+      relationName: "_rels",
+    }),
+    mediaID: one(media, {
+      fields: [accessories_rels.mediaID],
+      references: [media.id],
+      relationName: "media",
+    }),
+    publishersID: one(publishers, {
+      fields: [accessories_rels.publishersID],
+      references: [publishers.id],
+      relationName: "publishers",
+    }),
+  })
+);
+export const relations_accessories = relations(accessories, ({ many }) => ({
+  alternateNames: many(accessories_alternate_names, {
+    relationName: "alternateNames",
+  }),
+  _rels: many(accessories_rels, {
+    relationName: "_rels",
+  }),
+}));
+export const relations_artists = relations(artists, () => ({}));
+export const relations_categories = relations(categories, () => ({}));
+export const relations_designers = relations(designers, () => ({}));
+export const relations_gamenights_rels = relations(
+  gamenights_rels,
+  ({ one }) => ({
+    parent: one(gamenights, {
+      fields: [gamenights_rels.parent],
+      references: [gamenights.id],
+      relationName: "_rels",
+    }),
+    usersID: one(users, {
+      fields: [gamenights_rels.usersID],
+      references: [users.id],
+      relationName: "users",
+    }),
+    gamesID: one(games, {
+      fields: [gamenights_rels.gamesID],
+      references: [games.id],
+      relationName: "games",
+    }),
+  })
+);
+export const relations_gamenights = relations(gamenights, ({ many }) => ({
+  _rels: many(gamenights_rels, {
+    relationName: "_rels",
+  }),
+}));
+export const relations_games_suggested_player_count = relations(
+  games_suggested_player_count,
+  ({ one }) => ({
+    _parentID: one(games, {
+      fields: [games_suggested_player_count._parentID],
+      references: [games.id],
+      relationName: "suggestedPlayerCount",
+    }),
+  })
+);
+export const relations_games_rels = relations(games_rels, ({ one }) => ({
+  parent: one(games, {
+    fields: [games_rels.parent],
+    references: [games.id],
+    relationName: "_rels",
+  }),
+  mediaID: one(media, {
+    fields: [games_rels.mediaID],
+    references: [media.id],
+    relationName: "media",
+  }),
+  typesID: one(types, {
+    fields: [games_rels.typesID],
+    references: [types.id],
+    relationName: "types",
+  }),
+  categoriesID: one(categories, {
+    fields: [games_rels.categoriesID],
+    references: [categories.id],
+    relationName: "categories",
+  }),
+  mechanicsID: one(mechanics, {
+    fields: [games_rels.mechanicsID],
+    references: [mechanics.id],
+    relationName: "mechanics",
+  }),
+  designersID: one(designers, {
+    fields: [games_rels.designersID],
+    references: [designers.id],
+    relationName: "designers",
+  }),
+  publishersID: one(publishers, {
+    fields: [games_rels.publishersID],
+    references: [publishers.id],
+    relationName: "publishers",
+  }),
+  artistsID: one(artists, {
+    fields: [games_rels.artistsID],
+    references: [artists.id],
+    relationName: "artists",
+  }),
+  gamesID: one(games, {
+    fields: [games_rels.gamesID],
+    references: [games.id],
+    relationName: "games",
+  }),
+  accessoriesID: one(accessories, {
+    fields: [games_rels.accessoriesID],
+    references: [accessories.id],
+    relationName: "accessories",
+  }),
+}));
+export const relations_games = relations(games, ({ one, many }) => ({
+  baseGame: one(games, {
+    fields: [games.baseGame],
+    references: [games.id],
+    relationName: "baseGame",
+  }),
+  suggestedPlayerCount: many(games_suggested_player_count, {
+    relationName: "suggestedPlayerCount",
+  }),
+  _rels: many(games_rels, {
+    relationName: "_rels",
+  }),
+}));
+export const relations_libraries_rels = relations(
+  libraries_rels,
+  ({ one }) => ({
+    parent: one(libraries, {
+      fields: [libraries_rels.parent],
+      references: [libraries.id],
+      relationName: "_rels",
+    }),
+    gamesID: one(games, {
+      fields: [libraries_rels.gamesID],
+      references: [games.id],
+      relationName: "games",
+    }),
+  })
+);
+export const relations_libraries = relations(libraries, ({ one, many }) => ({
+  createdBy: one(users, {
+    fields: [libraries.createdBy],
+    references: [users.id],
+    relationName: "createdBy",
+  }),
+  _rels: many(libraries_rels, {
+    relationName: "_rels",
+  }),
+}));
+export const relations_mechanics = relations(mechanics, () => ({}));
+export const relations_media = relations(media, () => ({}));
+export const relations_notes = relations(notes, ({ one }) => ({
+  user: one(users, {
+    fields: [notes.user],
+    references: [users.id],
+    relationName: "user",
+  }),
+}));
+export const relations_publishers_rels = relations(
+  publishers_rels,
+  ({ one }) => ({
+    parent: one(publishers, {
+      fields: [publishers_rels.parent],
+      references: [publishers.id],
+      relationName: "_rels",
+    }),
+    mediaID: one(media, {
+      fields: [publishers_rels.mediaID],
+      references: [media.id],
+      relationName: "media",
+    }),
+  })
+);
+export const relations_publishers = relations(publishers, ({ many }) => ({
+  _rels: many(publishers_rels, {
+    relationName: "_rels",
+  }),
+}));
+export const relations_types = relations(types, () => ({}));
+export const relations_usermedia = relations(usermedia, () => ({}));
 export const relations_users_roles = relations(users_roles, ({ one }) => ({
   parent: one(users, {
     fields: [users_roles.parent],
@@ -854,58 +1420,21 @@ export const relations_users_roles = relations(users_roles, ({ one }) => ({
     relationName: "roles",
   }),
 }));
-export const relations_users_libraries = relations(
-  users_libraries,
-  ({ one }) => ({
-    _parentID: one(users, {
-      fields: [users_libraries._parentID],
-      references: [users.id],
-      relationName: "libraries",
-    }),
-    library: one(libraries, {
-      fields: [users_libraries.library],
-      references: [libraries.id],
-      relationName: "library",
-    }),
-  })
-);
-export const relations_users_game_nights = relations(
-  users_game_nights,
-  ({ one }) => ({
-    _parentID: one(users, {
-      fields: [users_game_nights._parentID],
-      references: [users.id],
-      relationName: "gameNights",
-    }),
-    "game night": one(gamenights, {
-      fields: [users_game_nights["game night"]],
-      references: [gamenights.id],
-      relationName: "game night",
-    }),
-  })
-);
-export const relations_users_friends = relations(users_friends, ({ one }) => ({
-  _parentID: one(users, {
-    fields: [users_friends._parentID],
-    references: [users.id],
-    relationName: "friends",
-  }),
-}));
-export const relations_users_notebooks = relations(
-  users_notebooks,
-  ({ one }) => ({
-    _parentID: one(users, {
-      fields: [users_notebooks._parentID],
-      references: [users.id],
-      relationName: "notebooks",
-    }),
-  })
-);
 export const relations_users_rels = relations(users_rels, ({ one }) => ({
   parent: one(users, {
     fields: [users_rels.parent],
     references: [users.id],
     relationName: "_rels",
+  }),
+  librariesID: one(libraries, {
+    fields: [users_rels.librariesID],
+    references: [libraries.id],
+    relationName: "libraries",
+  }),
+  gamenightsID: one(gamenights, {
+    fields: [users_rels.gamenightsID],
+    references: [gamenights.id],
+    relationName: "gamenights",
   }),
   usersID: one(users, {
     fields: [users_rels.usersID],
@@ -922,148 +1451,15 @@ export const relations_users = relations(users, ({ one, many }) => ({
   roles: many(users_roles, {
     relationName: "roles",
   }),
-  libraries: many(users_libraries, {
-    relationName: "libraries",
-  }),
-  gameNights: many(users_game_nights, {
-    relationName: "gameNights",
-  }),
-  friends: many(users_friends, {
-    relationName: "friends",
-  }),
-  notebooks: many(users_notebooks, {
-    relationName: "notebooks",
-  }),
-  avatar: one(media, {
+  avatar: one(usermedia, {
     fields: [users.avatar],
-    references: [media.id],
+    references: [usermedia.id],
     relationName: "avatar",
   }),
   _rels: many(users_rels, {
     relationName: "_rels",
   }),
 }));
-export const relations_media = relations(media, () => ({}));
-export const relations_libraries_games = relations(
-  libraries_games,
-  ({ one }) => ({
-    _parentID: one(libraries, {
-      fields: [libraries_games._parentID],
-      references: [libraries.id],
-      relationName: "games",
-    }),
-    game: one(games, {
-      fields: [libraries_games.game],
-      references: [games.id],
-      relationName: "game",
-    }),
-  })
-);
-export const relations_libraries = relations(libraries, ({ many }) => ({
-  games: many(libraries_games, {
-    relationName: "games",
-  }),
-}));
-export const relations_notes = relations(notes, ({ one }) => ({
-  user: one(users, {
-    fields: [notes.user],
-    references: [users.id],
-    relationName: "user",
-  }),
-}));
-export const relations_gamenights_players = relations(
-  gamenights_players,
-  ({ one }) => ({
-    _parentID: one(gamenights, {
-      fields: [gamenights_players._parentID],
-      references: [gamenights.id],
-      relationName: "players",
-    }),
-    player: one(users, {
-      fields: [gamenights_players.player],
-      references: [users.id],
-      relationName: "player",
-    }),
-  })
-);
-export const relations_gamenights_games = relations(
-  gamenights_games,
-  ({ one }) => ({
-    _parentID: one(gamenights, {
-      fields: [gamenights_games._parentID],
-      references: [gamenights.id],
-      relationName: "games",
-    }),
-    game: one(games, {
-      fields: [gamenights_games.game],
-      references: [games.id],
-      relationName: "game",
-    }),
-  })
-);
-export const relations_gamenights = relations(gamenights, ({ many }) => ({
-  players: many(gamenights_players, {
-    relationName: "players",
-  }),
-  games: many(gamenights_games, {
-    relationName: "games",
-  }),
-}));
-export const relations_games_images = relations(games_images, ({ one }) => ({
-  _parentID: one(games, {
-    fields: [games_images._parentID],
-    references: [games.id],
-    relationName: "images",
-  }),
-  image: one(media, {
-    fields: [games_images.image],
-    references: [media.id],
-    relationName: "image",
-  }),
-}));
-export const relations_games_categories = relations(
-  games_categories,
-  ({ one }) => ({
-    _parentID: one(games, {
-      fields: [games_categories._parentID],
-      references: [games.id],
-      relationName: "categories",
-    }),
-    category: one(categories, {
-      fields: [games_categories.category],
-      references: [categories.id],
-      relationName: "category",
-    }),
-  })
-);
-export const relations_games_mechanics = relations(
-  games_mechanics,
-  ({ one }) => ({
-    _parentID: one(games, {
-      fields: [games_mechanics._parentID],
-      references: [games.id],
-      relationName: "mechanics",
-    }),
-    mechanic: one(mechanics, {
-      fields: [games_mechanics.mechanic],
-      references: [mechanics.id],
-      relationName: "mechanic",
-    }),
-  })
-);
-export const relations_games = relations(games, ({ many }) => ({
-  images: many(games_images, {
-    relationName: "images",
-  }),
-  categories: many(games_categories, {
-    relationName: "categories",
-  }),
-  mechanics: many(games_mechanics, {
-    relationName: "mechanics",
-  }),
-}));
-export const relations_categories = relations(categories, () => ({}));
-export const relations_mechanics = relations(mechanics, () => ({}));
 export const relations_payload_locked_documents_rels = relations(
   payload_locked_documents_rels,
   ({ one }) => ({
@@ -1072,25 +1468,25 @@ export const relations_payload_locked_documents_rels = relations(
       references: [payload_locked_documents.id],
       relationName: "_rels",
     }),
-    usersID: one(users, {
-      fields: [payload_locked_documents_rels.usersID],
-      references: [users.id],
-      relationName: "users",
+    accessoriesID: one(accessories, {
+      fields: [payload_locked_documents_rels.accessoriesID],
+      references: [accessories.id],
+      relationName: "accessories",
     }),
-    mediaID: one(media, {
-      fields: [payload_locked_documents_rels.mediaID],
-      references: [media.id],
-      relationName: "media",
+    artistsID: one(artists, {
+      fields: [payload_locked_documents_rels.artistsID],
+      references: [artists.id],
+      relationName: "artists",
     }),
-    librariesID: one(libraries, {
-      fields: [payload_locked_documents_rels.librariesID],
-      references: [libraries.id],
-      relationName: "libraries",
+    categoriesID: one(categories, {
+      fields: [payload_locked_documents_rels.categoriesID],
+      references: [categories.id],
+      relationName: "categories",
     }),
-    notesID: one(notes, {
-      fields: [payload_locked_documents_rels.notesID],
-      references: [notes.id],
-      relationName: "notes",
+    designersID: one(designers, {
+      fields: [payload_locked_documents_rels.designersID],
+      references: [designers.id],
+      relationName: "designers",
     }),
     gamenightsID: one(gamenights, {
       fields: [payload_locked_documents_rels.gamenightsID],
@@ -1102,15 +1498,45 @@ export const relations_payload_locked_documents_rels = relations(
       references: [games.id],
       relationName: "games",
     }),
-    categoriesID: one(categories, {
-      fields: [payload_locked_documents_rels.categoriesID],
-      references: [categories.id],
-      relationName: "categories",
+    librariesID: one(libraries, {
+      fields: [payload_locked_documents_rels.librariesID],
+      references: [libraries.id],
+      relationName: "libraries",
     }),
     mechanicsID: one(mechanics, {
       fields: [payload_locked_documents_rels.mechanicsID],
       references: [mechanics.id],
       relationName: "mechanics",
+    }),
+    mediaID: one(media, {
+      fields: [payload_locked_documents_rels.mediaID],
+      references: [media.id],
+      relationName: "media",
+    }),
+    notesID: one(notes, {
+      fields: [payload_locked_documents_rels.notesID],
+      references: [notes.id],
+      relationName: "notes",
+    }),
+    publishersID: one(publishers, {
+      fields: [payload_locked_documents_rels.publishersID],
+      references: [publishers.id],
+      relationName: "publishers",
+    }),
+    typesID: one(types, {
+      fields: [payload_locked_documents_rels.typesID],
+      references: [types.id],
+      relationName: "types",
+    }),
+    usermediaID: one(usermedia, {
+      fields: [payload_locked_documents_rels.usermediaID],
+      references: [usermedia.id],
+      relationName: "usermedia",
+    }),
+    usersID: one(users, {
+      fields: [payload_locked_documents_rels.usersID],
+      references: [users.id],
+      relationName: "users",
     }),
   })
 );
@@ -1151,53 +1577,59 @@ export const relations_payload_migrations = relations(
 );
 
 type DatabaseSchema = {
+  enum_games_language_dependence: typeof enum_games_language_dependence;
   enum_users_roles: typeof enum_users_roles;
-  enum_games_type: typeof enum_games_type;
+  accessories_alternate_names: typeof accessories_alternate_names;
+  accessories: typeof accessories;
+  accessories_rels: typeof accessories_rels;
+  artists: typeof artists;
+  categories: typeof categories;
+  designers: typeof designers;
+  gamenights: typeof gamenights;
+  gamenights_rels: typeof gamenights_rels;
+  games_suggested_player_count: typeof games_suggested_player_count;
+  games: typeof games;
+  games_rels: typeof games_rels;
+  libraries: typeof libraries;
+  libraries_rels: typeof libraries_rels;
+  mechanics: typeof mechanics;
+  media: typeof media;
+  notes: typeof notes;
+  publishers: typeof publishers;
+  publishers_rels: typeof publishers_rels;
+  types: typeof types;
+  usermedia: typeof usermedia;
   users_roles: typeof users_roles;
-  users_libraries: typeof users_libraries;
-  users_game_nights: typeof users_game_nights;
-  users_friends: typeof users_friends;
-  users_notebooks: typeof users_notebooks;
   users: typeof users;
   users_rels: typeof users_rels;
-  media: typeof media;
-  libraries_games: typeof libraries_games;
-  libraries: typeof libraries;
-  notes: typeof notes;
-  gamenights_players: typeof gamenights_players;
-  gamenights_games: typeof gamenights_games;
-  gamenights: typeof gamenights;
-  games_images: typeof games_images;
-  games_categories: typeof games_categories;
-  games_mechanics: typeof games_mechanics;
-  games: typeof games;
-  categories: typeof categories;
-  mechanics: typeof mechanics;
   payload_locked_documents: typeof payload_locked_documents;
   payload_locked_documents_rels: typeof payload_locked_documents_rels;
   payload_preferences: typeof payload_preferences;
   payload_preferences_rels: typeof payload_preferences_rels;
   payload_migrations: typeof payload_migrations;
+  relations_accessories_alternate_names: typeof relations_accessories_alternate_names;
+  relations_accessories_rels: typeof relations_accessories_rels;
+  relations_accessories: typeof relations_accessories;
+  relations_artists: typeof relations_artists;
+  relations_categories: typeof relations_categories;
+  relations_designers: typeof relations_designers;
+  relations_gamenights_rels: typeof relations_gamenights_rels;
+  relations_gamenights: typeof relations_gamenights;
+  relations_games_suggested_player_count: typeof relations_games_suggested_player_count;
+  relations_games_rels: typeof relations_games_rels;
+  relations_games: typeof relations_games;
+  relations_libraries_rels: typeof relations_libraries_rels;
+  relations_libraries: typeof relations_libraries;
+  relations_mechanics: typeof relations_mechanics;
+  relations_media: typeof relations_media;
+  relations_notes: typeof relations_notes;
+  relations_publishers_rels: typeof relations_publishers_rels;
+  relations_publishers: typeof relations_publishers;
+  relations_types: typeof relations_types;
+  relations_usermedia: typeof relations_usermedia;
   relations_users_roles: typeof relations_users_roles;
-  relations_users_libraries: typeof relations_users_libraries;
-  relations_users_game_nights: typeof relations_users_game_nights;
-  relations_users_friends: typeof relations_users_friends;
-  relations_users_notebooks: typeof relations_users_notebooks;
   relations_users_rels: typeof relations_users_rels;
   relations_users: typeof relations_users;
-  relations_media: typeof relations_media;
-  relations_libraries_games: typeof relations_libraries_games;
-  relations_libraries: typeof relations_libraries;
-  relations_notes: typeof relations_notes;
-  relations_gamenights_players: typeof relations_gamenights_players;
-  relations_gamenights_games: typeof relations_gamenights_games;
-  relations_gamenights: typeof relations_gamenights;
-  relations_games_images: typeof relations_games_images;
-  relations_games_categories: typeof relations_games_categories;
-  relations_games_mechanics: typeof relations_games_mechanics;
-  relations_games: typeof relations_games;
-  relations_categories: typeof relations_categories;
-  relations_mechanics: typeof relations_mechanics;
   relations_payload_locked_documents_rels: typeof relations_payload_locked_documents_rels;
   relations_payload_locked_documents: typeof relations_payload_locked_documents;
   relations_payload_preferences_rels: typeof relations_payload_preferences_rels;

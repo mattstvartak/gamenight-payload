@@ -8,12 +8,16 @@ export const GameNights: CollectionConfig = {
   slug: "gamenights",
   admin: {
     useAsTitle: "name",
-    group: "Content",
+    group: "User Collentions",
+  },
+  labels: {
+    singular: "Game Night",
+    plural: "Game Nights",
   },
   hooks: {
     beforeChange: [
       ({ req, operation, data }) => {
-        if (operation === 'create') {
+        if (operation === "create") {
           if (req.user) {
             data.createdBy = req.user.id;
             return data;
@@ -29,7 +33,7 @@ export const GameNights: CollectionConfig = {
     delete: admins,
     admin: ({ req: { user } }) => {
       if (!user) return false;
-      return checkRole(['admin'], user);
+      return checkRole(["admin"], user);
     },
   },
   fields: [
@@ -51,25 +55,15 @@ export const GameNights: CollectionConfig = {
     },
     {
       name: "players",
-      type: "array",
-      fields: [
-        {
-          name: "player",
-          type: "relationship",
-          relationTo: "users",
-        }
-      ]
+      type: "relationship",
+      relationTo: "users",
+      hasMany: true,
     },
     {
       name: "games",
-      type: "array",
-      fields: [
-        {
-          name: "game",
-          type: "relationship",
-          relationTo: "games",
-        }
-      ]
+      type: "relationship",
+      relationTo: "games",
+      hasMany: true,
     },
     {
       name: "recurring",
