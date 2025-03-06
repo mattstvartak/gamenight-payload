@@ -1,5 +1,13 @@
 import { JSDOM } from "jsdom";
 import { bggRateLimiter } from "./asyncUtils";
+import {
+  XMLNode,
+  BGGResponse,
+  XMLValue,
+  isXMLNode,
+  isBGGResponse,
+  isXMLNodeArray,
+} from "./xml-types";
 
 /**
  * Fetches XML from a URL and converts it to a clean JavaScript object
@@ -7,10 +15,12 @@ import { bggRateLimiter } from "./asyncUtils";
  * - Extracts text content directly
  * - Flattens the structure where appropriate
  */
-export const fetchXMLAndConvertToObject = async (url: string) => {
+export const fetchXMLAndConvertToObject = async (
+  url: string
+): Promise<BGGResponse> => {
   try {
     // Use the rate limiter's withRetry method to handle rate limiting
-    const fetchWithRetry = async (fetchUrl: string) => {
+    const fetchWithRetry = async (fetchUrl: string): Promise<string> => {
       const response = await fetch(fetchUrl);
 
       // Handle 429 Too Many Requests explicitly
@@ -25,13 +35,13 @@ export const fetchXMLAndConvertToObject = async (url: string) => {
 
         // Throw an error with status code so the retry logic can handle it
         const error = new Error(`Too Many Requests: BGG API rate limited`);
-        (error as any).status = 429;
+        (error as Error & { status?: number }).status = 429;
         throw error;
       }
 
       if (!response.ok) {
         const error = new Error(`HTTP error! Status: ${response.status}`);
-        (error as any).status = response.status;
+        (error as Error & { status?: number }).status = response.status;
         throw error;
       }
 
@@ -45,22 +55,27 @@ export const fetchXMLAndConvertToObject = async (url: string) => {
     const parser = new dom.window.DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-    function xmlToObject(xml: Node): any {
-      const obj: Record<string, any> = {};
-      if (xml.nodeType === 1) {
-        // Element node
-        if ((xml as Element).attributes?.length > 0) {
-          obj["@attributes"] = {};
-          for (let j = 0; j < (xml as Element).attributes.length; j++) {
-            const attribute = (xml as Element).attributes.item(j);
-            if (attribute) {
-              obj["@attributes"][attribute.nodeName] = attribute.nodeValue;
-            }
+    function xmlToObject(xml: Node): XMLValue {
+      if (xml.nodeType === 3) {
+        // Text node
+        return xml.nodeValue?.trim() || "";
+      }
+
+      if (xml.nodeType !== 1) {
+        return undefined;
+      }
+
+      const obj: XMLNode = {};
+
+      // Element node
+      if ((xml as Element).attributes?.length > 0) {
+        obj["@attributes"] = {};
+        for (let j = 0; j < (xml as Element).attributes.length; j++) {
+          const attribute = (xml as Element).attributes.item(j);
+          if (attribute) {
+            obj["@attributes"][attribute.nodeName] = attribute.nodeValue;
           }
         }
-      } else if (xml.nodeType === 3) {
-        // Text node
-        return xml.nodeValue?.trim();
       }
 
       if (xml.hasChildNodes()) {
@@ -73,10 +88,12 @@ export const fetchXMLAndConvertToObject = async (url: string) => {
             if (typeof obj[nodeName] === "undefined") {
               obj[nodeName] = jsonValue;
             } else {
-              if (!Array.isArray(obj[nodeName])) {
-                obj[nodeName] = [obj[nodeName]];
+              if (!isXMLNodeArray(obj[nodeName])) {
+                obj[nodeName] = [obj[nodeName] as XMLNode];
               }
-              obj[nodeName].push(jsonValue);
+              if (isXMLNode(jsonValue)) {
+                (obj[nodeName] as XMLNode[]).push(jsonValue);
+              }
             }
           }
         }
@@ -85,27 +102,29 @@ export const fetchXMLAndConvertToObject = async (url: string) => {
       return obj;
     }
 
-    function cleanXmlObject(obj: any): any {
+    function cleanXmlObject(obj: XMLValue): XMLValue {
       if (obj === null || typeof obj !== "object") {
         return obj;
       }
 
       // If it's an array, clean each item
       if (Array.isArray(obj)) {
-        return obj.map((item) => cleanXmlObject(item));
+        return obj.map((item) => cleanXmlObject(item)) as XMLNode[];
       }
 
-      const result: Record<string, any> = {};
+      const result: XMLNode = {};
 
       // Process @attributes
-      if (obj["@attributes"]) {
+      if (isXMLNode(obj) && obj["@attributes"]) {
         for (const [key, value] of Object.entries(obj["@attributes"])) {
-          result[key] = value;
+          if (value !== null) {
+            result[key] = value;
+          }
         }
       }
 
       // Handle #text content directly
-      if (obj["#text"]) {
+      if (isXMLNode(obj) && obj["#text"]) {
         if (Object.keys(obj).length === 1) {
           return obj["#text"]; // If the object only has #text, return the text directly
         } else {
@@ -114,9 +133,11 @@ export const fetchXMLAndConvertToObject = async (url: string) => {
       }
 
       // Process all other properties
-      for (const [key, value] of Object.entries(obj)) {
-        if (key !== "@attributes" && key !== "#text") {
-          result[key] = cleanXmlObject(value);
+      if (isXMLNode(obj)) {
+        for (const [key, value] of Object.entries(obj)) {
+          if (key !== "@attributes" && key !== "#text") {
+            result[key] = cleanXmlObject(value);
+          }
         }
       }
 
@@ -124,7 +145,14 @@ export const fetchXMLAndConvertToObject = async (url: string) => {
     }
 
     const intermediateObj = xmlToObject(xmlDoc);
-    return cleanXmlObject(intermediateObj).items.item;
+    const cleanedObj = cleanXmlObject(intermediateObj);
+
+    // Ensure the response matches the BGGResponse type
+    if (!isBGGResponse(cleanedObj)) {
+      throw new Error("Invalid XML structure: missing items");
+    }
+
+    return cleanedObj;
   } catch (error) {
     console.error("Error fetching or converting XML:", error);
     throw error;
