@@ -70,6 +70,7 @@ export interface Config {
     artists: Artist;
     categories: Category;
     designers: Designer;
+    expansions: Expansion;
     gamenights: Gamenight;
     games: Game;
     libraries: Library;
@@ -97,6 +98,9 @@ export interface Config {
     designers: {
       games: 'games';
     };
+    expansions: {
+      libraries: 'libraries';
+    };
     games: {
       libraries: 'libraries';
     };
@@ -116,6 +120,7 @@ export interface Config {
     artists: ArtistsSelect<false> | ArtistsSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     designers: DesignersSelect<false> | DesignersSelect<true>;
+    expansions: ExpansionsSelect<false> | ExpansionsSelect<true>;
     gamenights: GamenightsSelect<false> | GamenightsSelect<true>;
     games: GamesSelect<false> | GamesSelect<true>;
     libraries: LibrariesSelect<false> | LibrariesSelect<true>;
@@ -382,10 +387,7 @@ export interface Game {
       }[]
     | null;
   languageDependence?: ('0' | '1' | '2' | '3' | '4') | null;
-  /**
-   * Indicates whether the game is still being processed. Set to false when the game and all related content are complete.
-   */
-  processing?: boolean | null;
+  processed?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -666,6 +668,109 @@ export interface Usermedia {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "expansions".
+ */
+export interface Expansion {
+  id: number;
+  bggId?: number | null;
+  name?: string | null;
+  /**
+   * Original name if different from primary name
+   */
+  originalName?: string | null;
+  description?: {
+    root: {
+      type: string;
+      children: {
+        type: string;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  images?: (number | Media)[] | null;
+  'affiliate link'?: string | null;
+  type?: (number | Type)[] | null;
+  yearPublished?: number | null;
+  minPlayers?: number | null;
+  maxPlayers?: number | null;
+  /**
+   * Average playing time in minutes
+   */
+  playingTime?: number | null;
+  minPlaytime?: number | null;
+  maxPlaytime?: number | null;
+  minAge?: number | null;
+  /**
+   * Game weight/complexity rating (1-5)
+   */
+  complexity?: number | null;
+  /**
+   * Average user rating from BGG (1-10)
+   */
+  userRating?: number | null;
+  /**
+   * Number of users who rated the game on BGG
+   */
+  userRatedCount?: number | null;
+  'official link'?: string | null;
+  /**
+   * Board Game Geek overall rank
+   */
+  bggRank?: number | null;
+  categories?: (number | Category)[] | null;
+  mechanics?: (number | Mechanic)[] | null;
+  designers?: (number | Designer)[] | null;
+  publishers?: (number | Publisher)[] | null;
+  artists?: (number | Artist)[] | null;
+  expansions?: (number | Game)[] | null;
+  /**
+   * Base game if this is an expansion
+   */
+  baseGame?: (number | null) | Game;
+  implementations?: (number | Game)[] | null;
+  accessories?: (number | Accessory)[] | null;
+  libraries?: {
+    docs?: (number | Library)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  /**
+   * Recommended player counts from BGG polls
+   */
+  suggestedPlayerCount?:
+    | {
+        playerCount?: number | null;
+        /**
+         * Number of 'Best' votes for this player count
+         */
+        bestCount?: number | null;
+        /**
+         * Number of 'Recommended' votes for this player count
+         */
+        recommendedCount?: number | null;
+        /**
+         * Number of 'Not Recommended' votes for this player count
+         */
+        notRecommendedCount?: number | null;
+        id?: string | null;
+      }[]
+    | null;
+  languageDependence?: ('0' | '1' | '2' | '3' | '4') | null;
+  /**
+   * Indicates whether the expansion has been processed. Set to true when the expansion and all related content are complete.
+   */
+  processed?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-locked-documents".
  */
 export interface PayloadLockedDocument {
@@ -686,6 +791,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'designers';
         value: number | Designer;
+      } | null)
+    | ({
+        relationTo: 'expansions';
+        value: number | Expansion;
       } | null)
     | ({
         relationTo: 'gamenights';
@@ -830,6 +939,54 @@ export interface DesignersSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "expansions_select".
+ */
+export interface ExpansionsSelect<T extends boolean = true> {
+  bggId?: T;
+  name?: T;
+  originalName?: T;
+  description?: T;
+  images?: T;
+  'affiliate link'?: T;
+  type?: T;
+  yearPublished?: T;
+  minPlayers?: T;
+  maxPlayers?: T;
+  playingTime?: T;
+  minPlaytime?: T;
+  maxPlaytime?: T;
+  minAge?: T;
+  complexity?: T;
+  userRating?: T;
+  userRatedCount?: T;
+  'official link'?: T;
+  bggRank?: T;
+  categories?: T;
+  mechanics?: T;
+  designers?: T;
+  publishers?: T;
+  artists?: T;
+  expansions?: T;
+  baseGame?: T;
+  implementations?: T;
+  accessories?: T;
+  libraries?: T;
+  suggestedPlayerCount?:
+    | T
+    | {
+        playerCount?: T;
+        bestCount?: T;
+        recommendedCount?: T;
+        notRecommendedCount?: T;
+        id?: T;
+      };
+  languageDependence?: T;
+  processed?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "gamenights_select".
  */
 export interface GamenightsSelect<T extends boolean = true> {
@@ -889,7 +1046,7 @@ export interface GamesSelect<T extends boolean = true> {
         id?: T;
       };
   languageDependence?: T;
-  processing?: T;
+  processed?: T;
   updatedAt?: T;
   createdAt?: T;
 }

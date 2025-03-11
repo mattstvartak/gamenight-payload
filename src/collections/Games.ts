@@ -244,13 +244,9 @@ export const Games: CollectionConfig = {
       ],
     },
     {
-      name: "processing",
+      name: "processed",
       type: "checkbox",
-      defaultValue: true,
-      admin: {
-        description:
-          "Indicates whether the game is still being processed. Set to false when the game and all related content are complete.",
-      },
+      defaultValue: false,
     },
   ],
 };

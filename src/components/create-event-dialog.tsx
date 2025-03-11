@@ -91,7 +91,6 @@ export function CreateEventDialog() {
       return;
     }
 
-    console.log(values);
     setOpen(false);
     form.reset();
   }

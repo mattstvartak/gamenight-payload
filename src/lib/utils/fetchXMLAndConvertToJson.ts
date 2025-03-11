@@ -165,10 +165,6 @@ export const fetchXMLAndConvertToObject = async (
     // Ensure the response matches the BGGResponse type
     if (!isBGGResponse(cleanedObj)) {
       console.error("Invalid XML structure:", cleanedObj);
-      if (cleanedObj && typeof cleanedObj === "object") {
-        console.error("Object type:", typeof cleanedObj);
-        console.error("Object keys:", Object.keys(cleanedObj));
-      }
       throw new Error("Invalid XML structure: missing items or item");
     }
 

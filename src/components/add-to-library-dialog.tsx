@@ -88,7 +88,6 @@ export function AddToLibraryDialog() {
   });
 
   function onSubmit(values: FormValues) {
-    console.log(values);
     setOpen(false);
     form.reset();
   }

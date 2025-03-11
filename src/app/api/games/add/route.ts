@@ -1,120 +1,619 @@
-import { NextResponse } from "next/server";
 import { getPayload } from "payload";
 import config from "@payload-config";
-import { unlink } from "fs/promises";
+import { NextResponse } from "next/server";
+import { fetchBggGameData, formatBggGameData } from "@/lib/utils/bggUtils";
 import { formatRichText } from "@/lib/utils/formatUtils";
-import { createPayloadFile, downloadImageToTemp } from "@/lib/utils/fileUtils";
-import { delay } from "@/lib/utils/asyncUtils";
-import { extractBggEntityLinks } from "@/lib/utils/bggUtils";
-import { fetchBggGameData } from "@/lib/utils/bggUtils";
-import {
-  batchCheckExistence,
-  updateExistenceCache,
-} from "@/lib/utils/databaseUtils";
 
-// Create a TypeData interface for operations that include bggId
-interface TypeData {
-  name: string;
-  bggId?: number;
+// Entity cache to avoid redundant database lookups across imports
+const globalEntityCache = new Map();
+
+// Cache for storing processed image IDs
+const imageCache = new Map<string, string>();
+
+// Cache for storing entity IDs to avoid duplicate creation
+const entityCache = new Map<string, string>();
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "Game ID is required" }, { status: 400 });
+  }
+
+  try {
+    // Local cache for this import session
+    const entityCache = new Map(globalEntityCache);
+    const payload = await getPayload({ config });
+
+    // Check if game already exists in database by BGG ID
+    const numericBggId = Number(id);
+    if (!isNaN(numericBggId) && numericBggId > 0) {
+      const existingGames = await payload.find({
+        collection: "games",
+        where: {
+          bggId: {
+            equals: numericBggId,
+          },
+        },
+        limit: 1,
+      });
+
+      if (existingGames.docs.length > 0) {
+        console.log(
+          `Game with BGG ID ${numericBggId} already exists in database`
+        );
+        return NextResponse.json(
+          {
+            message: "Game already exists in database",
+            game: existingGames.docs[0],
+          },
+          { status: 200 }
+        );
+      }
+    }
+
+    // Fetch and process game data from BGG
+    const bggGameData = await fetchBggGameData(id);
+    if (!bggGameData?.items?.item) {
+      return NextResponse.json(
+        { error: "Game not found on BoardGameGeek" },
+        { status: 404 }
+      );
+    }
+
+    const formattedGame = await formatBggGameData(bggGameData.items.item);
+
+    // Validate the bggId to avoid validation errors
+    let bggId;
+    try {
+      bggId = Number(formattedGame.id);
+      if (isNaN(bggId) || bggId <= 0) {
+        // Generate a unique synthetic ID if bggId is invalid
+        bggId = Date.now() % 1000000;
+        console.warn(
+          `Invalid bggId received: ${formattedGame.id}, using synthetic ID: ${bggId}`
+        );
+      }
+    } catch (error) {
+      bggId = Date.now() % 1000000;
+      console.warn(`Error processing bggId, using synthetic ID: ${bggId}`);
+    }
+
+    // Basic game data with explicit type checking
+    const gameData: any = {
+      bggId: bggId,
+      name: formattedGame.name || `Game ${bggId}`, // Ensure name is never empty
+
+      // Make sure all these fields are explicitly set
+      yearPublished: formattedGame.yearPublished
+        ? Number(formattedGame.yearPublished)
+        : undefined,
+      minPlayers: formattedGame.minPlayers
+        ? Number(formattedGame.minPlayers)
+        : undefined,
+      maxPlayers: formattedGame.maxPlayers
+        ? Number(formattedGame.maxPlayers)
+        : undefined,
+      minPlaytime: formattedGame.minPlaytime
+        ? Number(formattedGame.minPlaytime)
+        : undefined,
+      maxPlaytime: formattedGame.maxPlaytime
+        ? Number(formattedGame.maxPlaytime)
+        : undefined,
+      playingTime: formattedGame.playingTime
+        ? Number(formattedGame.playingTime)
+        : undefined,
+
+      // The fields that were reported missing - adding null checks
+      minAge: formattedGame.minAge ? Number(formattedGame.minAge) : undefined,
+      complexity: formattedGame.complexity
+        ? Number(formattedGame.complexity)
+        : undefined,
+      userRating: formattedGame.userRating
+        ? Number(formattedGame.userRating)
+        : undefined,
+      userRatedCount: formattedGame.userRatedCount
+        ? Number(formattedGame.userRatedCount)
+        : undefined,
+      "official link": formattedGame["official link"] || undefined,
+      bggRank: formattedGame.bggRank
+        ? Number(formattedGame.bggRank)
+        : undefined,
+
+      // Original name handling
+      originalName:
+        formattedGame.alternateNames?.length > 0
+          ? formattedGame.alternateNames[0]
+          : undefined,
+    };
+
+    // Add language dependence
+    if (formattedGame.languageDependence?.level) {
+      // Ensure languageDependence is a string that matches one of the allowed enum values
+      const level = String(formattedGame.languageDependence.level);
+      // Only set if it's a valid value in the enum
+      if (["0", "1", "2", "3", "4"].includes(level)) {
+        gameData.languageDependence = level;
+      } else {
+        console.warn(`Invalid language dependence level: ${level}, ignoring`);
+      }
+    } else {
+      // If languageDependence is blank, explicitly set to null/undefined rather than
+      // letting an invalid value cause validation errors
+      gameData.languageDependence = undefined;
+    }
+
+    // Format description
+    gameData.description = formatDescriptionAsRichText(
+      formattedGame.description || ""
+    );
+
+    // Process suggested player count
+    if (
+      formattedGame.suggestedPlayerCount &&
+      Array.isArray(formattedGame.suggestedPlayerCount)
+    ) {
+      gameData.suggestedPlayerCount = formattedGame.suggestedPlayerCount;
+    }
+
+    // Check if this is an expansion
+    const isExpansion = formattedGame.type === "boardgameexpansion";
+
+    // Start image upload in parallel with relationship processing
+    let imagePromise;
+    if (formattedGame.image) {
+      imagePromise = uploadImageFromUrl(payload, formattedGame.image);
+    }
+
+    // Process all relationships in parallel for speed
+    const relationshipPromises = [];
+
+    // Map all relationships to process
+    const relationships = [
+      { name: "categories", items: formattedGame.categories },
+      { name: "mechanics", items: formattedGame.mechanics },
+      { name: "designers", items: formattedGame.designers },
+      { name: "publishers", items: formattedGame.publishers },
+      { name: "artists", items: formattedGame.artists },
+      {
+        name: "implementations",
+        items: formattedGame.implementations,
+        collection: "games",
+      },
+    ];
+
+    // If not an expansion, add expansions relationship
+    if (!isExpansion && formattedGame.expansions) {
+      relationships.push({
+        name: "expansions",
+        items: formattedGame.expansions,
+        collection: "games",
+      });
+    }
+
+    // Process all relationships in parallel
+    for (const rel of relationships) {
+      if (rel.items && Array.isArray(rel.items) && rel.items.length > 0) {
+        relationshipPromises.push(
+          processRelationships(
+            payload,
+            rel.name,
+            rel.items,
+            gameData,
+            rel.collection,
+            entityCache
+          )
+        );
+      }
+    }
+
+    // Wait for all relationship processing to complete in parallel
+    await Promise.all([...relationshipPromises].filter(Boolean));
+
+    // Ensure bggId is definitely a number type
+    if (!gameData.bggId || isNaN(gameData.bggId)) {
+      if (formattedGame.id && typeof formattedGame.id === "string") {
+        gameData.bggId = parseInt(formattedGame.id.replace(/\D/g, ""), 10);
+      }
+      if (!gameData.bggId || isNaN(gameData.bggId)) {
+        gameData.bggId = Date.now() % 1000000;
+      }
+    }
+    gameData.bggId = Number(gameData.bggId);
+
+    // Finish image upload if it was started
+    if (imagePromise) {
+      const imageId = await imagePromise;
+      if (imageId) {
+        gameData.images = [imageId];
+      }
+    }
+
+    // Create the game in the database
+    const newGame = await payload.create({
+      collection: "games",
+      data: gameData,
+    });
+
+    // Update the game to mark it as processed
+    if (newGame?.id) {
+      console.log(`Marking game ${newGame.id} as processed`);
+      await payload.update({
+        collection: "games",
+        id: newGame.id,
+        data: {
+          processed: true,
+        },
+      });
+    }
+
+    // Update global cache with any new entities discovered
+    entityCache.forEach((value, key) => {
+      globalEntityCache.set(key, value);
+    });
+
+    return NextResponse.json(newGame);
+  } catch (error) {
+    console.error("Error adding game:", error);
+    return NextResponse.json({ error: "Error adding game" }, { status: 500 });
+  }
 }
-
-// BGG data interfaces
-interface BGGNameItem {
-  value: string;
-  type?: string;
-  sortindex?: number;
-}
-
-interface BGGLink {
-  id: number;
-  value: string;
-  type?: string;
-}
-
-interface BGGValueItem {
-  value: string | number;
-}
-
-interface BGGPollResult {
-  value: string;
-  numvotes: string | number;
-}
-
-interface BGGPollResultContainer {
-  result: BGGPollResult | BGGPollResult[];
-  numplayers?: string | number;
-}
-
-interface BGGPoll {
-  name: string;
-  title?: string;
-  totalvotes?: number;
-  results: BGGPollResultContainer | BGGPollResultContainer[];
-}
-
-interface BGGRank {
-  id: string;
-  name: string;
-  value: string;
-  type?: string;
-  friendlyname?: string;
-  bayesaverage?: string;
-}
-
-interface BGGRating {
-  average?: BGGValueItem;
-  averageweight?: BGGValueItem;
-  usersrated?: BGGValueItem;
-  ranks?: BGGRank | BGGRank[];
-}
-
-interface BGGStatistics {
-  ratings: BGGRating;
-}
-
-interface BGGGame {
-  id?: number;
-  type?: string;
-  name?: BGGNameItem | BGGNameItem[] | string;
-  description?: string;
-  image?: string;
-  yearpublished?: BGGValueItem;
-  minplayers?: BGGValueItem;
-  maxplayers?: BGGValueItem;
-  playingtime?: BGGValueItem;
-  minplaytime?: BGGValueItem;
-  maxplaytime?: BGGValueItem;
-  minage?: BGGValueItem;
-  statistics?: BGGStatistics;
-  poll?: BGGPoll | BGGPoll[];
-  link?: BGGLink[];
-}
-
-// Define a type for BGG linked entities
-interface BGGLinkedEntity {
-  id: string | number;
-  value: string;
-  [key: string]: any;
-}
-
-// Shared variables for rate limiting
-const accessoryConsecutiveFailures = 0;
-const ACCESSORY_MAX_CONSECUTIVE_FAILURES = 3;
-const ACCESSORY_RATE_LIMIT_DELAY = 2000; // 2 seconds between requests
 
 /**
- * Adds a game from BoardGameGeek to the Payload CMS database
+ * Uploads an image from a URL to Payload CMS
+ * @param payload The Payload CMS instance
+ * @param imageUrl The URL of the image to upload
+ * @returns The created media document ID or null if upload fails
+ */
+async function uploadImageFromUrl(
+  payload: any,
+  imageUrl?: string
+): Promise<string | null> {
+  // If no image URL provided, return null
+  if (!imageUrl) {
+    console.log("No image URL provided");
+    return null;
+  }
+
+  try {
+    console.log(`Uploading image from URL: ${imageUrl}`);
+
+    // Create a cache key based on the image URL
+    const cacheKey = `image:${imageUrl}`;
+
+    // Check if we already processed this image
+    if (imageCache.has(cacheKey)) {
+      console.log(`Using cached image for ${imageUrl}`);
+      return imageCache.get(cacheKey) || null;
+    }
+
+    // Extract a valid filename from the URL
+    let filename = imageUrl.split("/").pop() || "image.jpg";
+
+    // Remove any query parameters from filename
+    if (filename.includes("?")) {
+      filename = filename.split("?")[0];
+    }
+
+    // Make sure the filename isn't too long for database
+    if (filename.length > 100) {
+      filename = filename.substring(0, 90) + ".jpg";
+    }
+
+    // Make sure the filename is safe
+    filename = filename.replace(/[^\w\d.-]/g, "_");
+
+    // Add extension if missing
+    if (!filename.includes(".")) {
+      filename += ".jpg";
+    }
+
+    console.log(`Using filename: ${filename}`);
+
+    // Check if media with this filename already exists
+    try {
+      const existingMedia = await payload.find({
+        collection: "media",
+        where: {
+          filename: {
+            equals: filename,
+          },
+        },
+        limit: 1,
+      });
+
+      if (existingMedia?.docs?.length > 0) {
+        const mediaId = existingMedia.docs[0].id;
+        console.log(`Found existing media with ID: ${mediaId}`);
+        imageCache.set(cacheKey, mediaId);
+        return mediaId;
+      }
+    } catch (findError) {
+      console.error("Error checking for existing media:", findError);
+      // Continue with creating new media
+    }
+
+    // Try to create a media entry with a URL reference
+    try {
+      const mediaDoc = await payload.create({
+        collection: "media",
+        data: {
+          alt: filename,
+          filename: filename,
+          url: imageUrl,
+        },
+      });
+
+      if (mediaDoc?.id) {
+        console.log(`Created media with ID: ${mediaDoc.id}`);
+        imageCache.set(cacheKey, mediaDoc.id);
+        return mediaDoc.id;
+      }
+    } catch (createError) {
+      console.error("Error creating media with URL:", createError);
+      // If this fails, we'll try the next approach
+    }
+
+    // If we get here, all attempts failed
+    console.warn(`Failed to upload image from URL: ${imageUrl}`);
+    return null;
+  } catch (error) {
+    console.error("Error in uploadImageFromUrl:", error);
+    return null;
+  }
+}
+
+/**
+ * Format a raw text description into Lexical rich text format
+ */
+function formatDescriptionAsRichText(description: string) {
+  try {
+    if (!description || typeof description !== "string") {
+      description = "";
+    }
+    return formatRichText(description);
+  } catch (error) {
+    console.error("Error formatting rich text:", error);
+    return {
+      root: {
+        type: "root",
+        format: "",
+        indent: 0,
+        version: 1,
+        children: [
+          {
+            type: "paragraph",
+            children: [{ text: "" }],
+            version: 1,
+          },
+        ],
+      },
+    };
+  }
+}
+
+/**
+ * Optimized function to handle relationship fields
+ * Uses batching and caching for better performance
+ */
+async function processRelationships(
+  payload: any,
+  collectionName: string,
+  items: any[] = [],
+  gameData: any,
+  targetCollection?: string,
+  entityCache?: Map<string, any>
+): Promise<any[] | undefined> {
+  if (!items || !items.length) {
+    return undefined;
+  }
+
+  const relationIds: any[] = [];
+  const collection = targetCollection || collectionName;
+
+  console.log(
+    `Processing ${collectionName} relationships with ${items.length} items`
+  );
+
+  // Filter out invalid items
+  const validItems = items.filter(
+    (item) => item && item.name && typeof item.name === "string"
+  );
+
+  if (validItems.length === 0) {
+    console.warn(`No valid items found for ${collectionName} after filtering`);
+    return undefined;
+  }
+
+  // Deduplicate items by name
+  const uniqueItems = Array.from(
+    new Map(validItems.map((item) => [item.name.trim(), item])).values()
+  );
+
+  if (uniqueItems.length === 0) {
+    return undefined;
+  }
+
+  console.log(
+    `${uniqueItems.length} unique ${collectionName} items after deduplication`
+  );
+
+  // Find all existing items in a single query with an array of names
+  const itemNames = uniqueItems.map((item) => item.name.trim());
+  try {
+    const existingItemsQuery = await payload.find({
+      collection: collection,
+      where: {
+        name: {
+          in: itemNames,
+        },
+      },
+      limit: 100, // Adjust based on expected maximum
+    });
+
+    // Create a map of existing items by name for quick lookups
+    const existingItemsMap = new Map();
+    if (existingItemsQuery.docs) {
+      existingItemsQuery.docs.forEach((doc: { name: string; id: string }) => {
+        existingItemsMap.set(doc.name, doc.id);
+        // Also add to entity cache
+        if (entityCache) {
+          entityCache.set(`${collection}:${doc.name}`, doc.id);
+        }
+      });
+    }
+
+    // Create items that don't exist yet
+    const itemsToCreate = uniqueItems.filter(
+      (item) => !existingItemsMap.has(item.name.trim())
+    );
+
+    console.log(
+      `${itemsToCreate.length} ${collectionName} items need to be created`
+    );
+
+    // Process items to create in batches for better performance
+    const batchSize = 10;
+    const createPromises = [];
+
+    for (let i = 0; i < itemsToCreate.length; i += batchSize) {
+      const batch = itemsToCreate.slice(i, i + batchSize);
+
+      // Process each batch in parallel
+      const batchPromises = batch.map(async (item) => {
+        try {
+          // Check cache first
+          const cacheKey = `${collection}:${item.name.trim()}`;
+          if (entityCache && entityCache.has(cacheKey)) {
+            return {
+              name: item.name.trim(),
+              id: entityCache.get(cacheKey),
+            };
+          }
+
+          // Generate a valid bggId if needed
+          let bggId;
+          if (item.id && !isNaN(Number(item.id)) && Number(item.id) > 0) {
+            bggId = Number(item.id);
+          } else if (collection === "games") {
+            // Only generate synthetic IDs for games
+            bggId = (Date.now() % 1000000) + Math.floor(Math.random() * 1000);
+            console.log(
+              `Generated synthetic bggId ${bggId} for game "${item.name}"`
+            );
+          }
+
+          // Create the new item
+          const newItemData: any = {
+            name: item.name.trim(),
+          };
+
+          // Only add fields that we know are valid
+          if (bggId !== undefined) {
+            newItemData.bggId = bggId;
+          }
+
+          // For games collection, set processing status
+          if (collection === "games") {
+            newItemData.processed = false;
+          }
+
+          console.log(`Creating new ${collection}: ${item.name}`);
+
+          try {
+            const newItem = await payload.create({
+              collection: collection,
+              data: newItemData,
+            });
+
+            // Cache the result
+            if (entityCache) {
+              entityCache.set(cacheKey, newItem.id);
+            }
+
+            return { name: item.name.trim(), id: newItem.id };
+          } catch (createError) {
+            console.error(
+              `Error creating ${collection} "${item.name}":`,
+              createError
+            );
+
+            // Try to find the item one more time - it might have been created in parallel
+            const retryFind = await payload.find({
+              collection: collection,
+              where: {
+                name: { equals: item.name.trim() },
+              },
+              limit: 1,
+            });
+
+            if (retryFind?.docs?.length > 0) {
+              const id = retryFind.docs[0].id;
+              if (entityCache) {
+                entityCache.set(cacheKey, id);
+              }
+              return { name: item.name.trim(), id };
+            }
+
+            return null;
+          }
+        } catch (error) {
+          console.error(
+            `Error processing ${collection} "${item.name}":`,
+            error
+          );
+          return null;
+        }
+      });
+
+      createPromises.push(...batchPromises);
+    }
+
+    // Wait for all creates to complete
+    const createdItems = await Promise.all(createPromises);
+
+    // Add created items to the map
+    createdItems.forEach((item) => {
+      if (item) {
+        existingItemsMap.set(item.name, item.id);
+      }
+    });
+
+    // Collect all IDs for the relationship
+    uniqueItems.forEach((item) => {
+      const id = existingItemsMap.get(item.name.trim());
+      if (id) {
+        relationIds.push(id);
+      }
+    });
+
+    if (relationIds.length > 0) {
+      // Log what we're adding
+      console.log(
+        `Adding ${relationIds.length} ${collectionName} relationships`
+      );
+      gameData[collectionName] = relationIds;
+    }
+
+    return relationIds.length > 0 ? relationIds : undefined;
+  } catch (error) {
+    console.error(`Error querying existing ${collectionName}:`, error);
+    return undefined;
+  }
+}
+
+/**
+ * Handles POST requests to add a game using a BGG ID
+ * This is a simplified endpoint that validates the BGG ID
+ * and then reuses the game fetching logic
  */
 export async function POST(request: Request) {
   try {
-    const payload = await getPayload({ config });
-    const { bggId, isExpansion, baseGameId } = await request.json();
+    const json = await request.json();
+    const bggId = json?.bggId;
 
-    // Get the request URL to check for query parameters
-    const url = new URL(request.url);
-    const isProcessingExpansions =
-      url.searchParams.get("processingExpansions") === "true";
-
+    // Validate bggId
     if (!bggId) {
       return NextResponse.json(
         { error: "BGG ID is required" },
@@ -122,1156 +621,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if game already exists
-    const existingGame = await payload.find({
-      collection: "games",
-      where: {
-        bggId: {
-          equals: bggId,
-        },
-      },
-    });
+    // Convert to number for validation
+    const numericBggId = Number(bggId);
 
-    let game;
-    let needsProcessing = false;
-
-    if (existingGame.docs.length > 0) {
-      game = existingGame.docs[0];
-
-      // If game already exists and processing is complete, return it immediately
-      if (game.processing === false) {
-        return NextResponse.json({
-          game,
-          message: "Game already exists and is fully processed",
-          alreadyProcessed: true,
-        });
-      }
-
-      // Always process relationships when a game exists but is still processing
-      needsProcessing = true;
-    }
-
-    // If we're handling an expansion, add a delay to respect BGG rate limits
-    if (isProcessingExpansions) {
-      await delay(1000); // Add a 1 second delay for BGG API calls
-    }
-
-    // Fetch game data from BGG using our new API endpoint
-    let bggGame;
-    try {
-      const response = await fetch(`${url.origin}/api/bgg/game`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ bggId }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch data from BGG API");
-      }
-
-      bggGame = await response.json();
-    } catch (error) {
-      console.error(`Error fetching data from BGG for ID ${bggId}:`, error);
+    if (isNaN(numericBggId) || numericBggId <= 0) {
       return NextResponse.json(
-        { error: "Failed to fetch data from BoardGameGeek" },
-        { status: 500 }
+        { error: "Invalid BGG ID format. Must be a positive number." },
+        { status: 400 }
       );
     }
 
-    // Extract all related data using our utility function
-    const bggGameData = bggGame?.items?.item || bggGame?.item;
-    if (!bggGameData) {
-      throw new Error("Invalid BGG response: missing game data");
-    }
-
-    const publishers = extractBggEntityLinks(bggGameData, "boardgamepublisher");
-    const designers = extractBggEntityLinks(bggGameData, "boardgamedesigner");
-    const categories = extractBggEntityLinks(bggGameData, "boardgamecategory");
-    const mechanics = extractBggEntityLinks(bggGameData, "boardgamemechanic");
-    const artists = extractBggEntityLinks(bggGameData, "boardgameartist");
-    const accessories = extractBggEntityLinks(
-      bggGameData,
-      "boardgameaccessory"
-    );
-
-    // Extract expansion information
-    const expansions = extractBggEntityLinks(bggGameData, "boardgameexpansion");
-
-    // Extract implementation information (base games that this expansion is for)
-    const implementations = extractBggEntityLinks(
-      bggGameData,
-      "boardgameimplementation"
-    );
-
-    // Extract type information - if BGG doesn't have boardgametype specifically,
-    // we'll use the general type field as a fallback
-    const typeNames: string[] = [];
-    const types: { id?: number; value: string }[] = [];
-    if (bggGameData?.type) {
-      // For the general type field, we don't have a direct BGG ID
-      typeNames.push(bggGameData.type);
-      types.push({ value: bggGameData.type });
-    }
-    // Also check if there are any boardgametype entries in the link array
-    const boardgameTypes = extractBggEntityLinks(bggGameData, "boardgametype");
-    for (const type of boardgameTypes) {
-      if (type?.value && !typeNames.includes(type.value)) {
-        typeNames.push(type.value);
-        types.push({ id: Number(type.id), value: type.value });
-      }
-    }
-
-    // Create a cache for entities to avoid duplicate lookups
-    interface EntityCache {
-      publishers: Record<string, number>;
-      designers: Record<string, number>;
-      categories: Record<string, number>;
-      mechanics: Record<string, number>;
-      artists: Record<string, number>;
-      types: Record<string, number>;
-      accessories: Record<string, number>;
-    }
-
-    const entityCache: EntityCache = {
-      publishers: {},
-      designers: {},
-      categories: {},
-      mechanics: {},
-      artists: {},
-      types: {},
-      accessories: {},
-    };
-
-    // Create or find publishers
-    const publisherIds = [];
-    if (publishers && Array.isArray(publishers)) {
-      for (const publisher of publishers) {
-        if (!publisher || !publisher.value) continue; // Skip if publisher or publisher.value is undefined
-
-        // Use cached value if available
-        if (entityCache.publishers[publisher.value]) {
-          publisherIds.push(Number(entityCache.publishers[publisher.value]));
-          continue;
-        }
-
-        // Check if publisher already exists
-        const existingPublishers = await payload.find({
-          collection: "publishers",
-          where: {
-            name: {
-              equals: publisher.value,
-            },
-          },
-        });
-
-        if (existingPublishers.docs.length > 0) {
-          // Publisher exists, use its ID
-          const publisherId = existingPublishers.docs[0].id;
-          publisherIds.push(Number(publisherId));
-          entityCache.publishers[publisher.value] = Number(publisherId);
-
-          // We found existing publisher, update with BGG ID if needed
-          if (publisher.id && !existingPublishers.docs[0].bggId) {
-            await payload.update({
-              collection: "publishers",
-              id: existingPublishers.docs[0].id,
-              data: {
-                bggId: publisher.id,
-              },
-            });
-          }
-        } else {
-          // Fetch additional publisher info from BGG family API using our new API endpoint
-          try {
-            // Add a slight delay to avoid BGG rate limits
-            await delay(300);
-
-            console.log(
-              `Fetching detailed publisher info for ${publisher.value} (ID: ${publisher.id})`
-            );
-
-            let publisherData: any = {};
-            try {
-              const response = await fetch(`${url.origin}/api/bgg/publisher`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ publisherId: publisher.id }),
-              });
-
-              if (response.ok) {
-                publisherData = await response.json();
-              } else {
-                console.log(
-                  `Invalid publisher data format for ${publisher.value}, proceeding with basic info only`
-                );
-              }
-            } catch (error) {
-              console.error(
-                `Error fetching publisher details for ${publisher.value}:`,
-                error
-              );
-            }
-
-            // Extract additional information if available
-            const description = publisherData?.description || "";
-            let imageUrl = null;
-
-            // Check if there's an image in the response
-            if (publisherData?.image) {
-              imageUrl = publisherData.image;
-            }
-
-            // Prepare the publisher data with description and BGG ID
-            const publisherDataToCreate: any = {
-              name: publisher.value,
-              bggId: publisher.id,
-              description: description
-                ? formatRichText(description)
-                : undefined,
-            };
-
-            // Create the publisher in our database
-            const newPublisher = await payload.create({
-              collection: "publishers",
-              data: publisherDataToCreate,
-            });
-
-            // Store in cache
-            const publisherId = newPublisher.id;
-            entityCache.publishers[publisher.value] = Number(publisherId);
-
-            // If we found an image, download and attach it
-            if (imageUrl) {
-              try {
-                const tempFilePath = await downloadImageToTemp(imageUrl);
-
-                if (tempFilePath) {
-                  // Create a payload file
-                  const imageFile = await createPayloadFile(
-                    tempFilePath,
-                    publisher.value
-                  );
-
-                  // Upload to Payload
-                  const uploadedImage = await payload.create({
-                    collection: "media",
-                    data: {
-                      alt: publisher.value,
-                    },
-                    file: imageFile,
-                  });
-
-                  // Update the publisher with the image
-                  await payload.update({
-                    collection: "publishers",
-                    id: newPublisher.id,
-                    data: {
-                      images: [uploadedImage.id],
-                    },
-                  });
-
-                  // Clean up temp file
-                  await unlink(tempFilePath).catch(console.error);
-                }
-              } catch (imageError) {
-                console.error(
-                  `Error processing publisher image for ${publisher.value}:`,
-                  imageError
-                );
-              }
-            }
-
-            publisherIds.push(Number(publisherId));
-          } catch (error) {
-            console.error(
-              `Error fetching publisher details for ${publisher.value}:`,
-              error
-            );
-
-            // Fall back to basic publisher creation if the family API fails
-            const newPublisher = await payload.create({
-              collection: "publishers",
-              data: {
-                name: publisher.value,
-                bggId: publisher.id,
-              },
-            });
-            const publisherId = newPublisher.id;
-            publisherIds.push(Number(publisherId));
-            entityCache.publishers[publisher.value] = Number(publisherId);
-          }
-        }
-      }
-    }
-
-    // Create or find designers
-    const designerIds = [];
-    if (designers && Array.isArray(designers)) {
-      for (const designer of designers) {
-        if (!designer || !designer.value) continue; // Skip if designer or designer.value is undefined
-
-        // Use cached value if available
-        if (entityCache.designers[designer.value]) {
-          designerIds.push(Number(entityCache.designers[designer.value]));
-          continue;
-        }
-
-        const existingDesigners = await payload.find({
-          collection: "designers",
-          where: {
-            name: {
-              equals: designer.value,
-            },
-          },
-        });
-
-        if (existingDesigners.docs.length > 0) {
-          const designerId = existingDesigners.docs[0].id;
-          designerIds.push(Number(designerId));
-          entityCache.designers[designer.value] = Number(designerId);
-
-          // Update bggId if missing
-          if (designer.id && !existingDesigners.docs[0].bggId) {
-            await payload.update({
-              collection: "designers",
-              id: existingDesigners.docs[0].id,
-              data: {
-                bggId: designer.id,
-              },
-            });
-          }
-        } else {
-          const newDesigner = await payload.create({
-            collection: "designers",
-            data: {
-              name: designer.value,
-              bggId: designer.id,
-            },
-          });
-          const designerId = newDesigner.id;
-          designerIds.push(Number(designerId));
-          entityCache.designers[designer.value] = Number(designerId);
-        }
-      }
-    }
-
-    // Create or find categories
-    const categoryIds = [];
-    if (categories && Array.isArray(categories)) {
-      for (const category of categories) {
-        if (!category || !category.value) continue; // Skip if category or category.value is undefined
-
-        // Use cached value if available
-        if (entityCache.categories[category.value]) {
-          categoryIds.push(Number(entityCache.categories[category.value]));
-          continue;
-        }
-
-        const existingCategories = await payload.find({
-          collection: "categories",
-          where: {
-            name: {
-              equals: category.value,
-            },
-          },
-        });
-
-        if (existingCategories.docs.length > 0) {
-          // Category exists, use its ID
-          const categoryId = existingCategories.docs[0].id;
-          categoryIds.push(Number(categoryId));
-          entityCache.categories[category.value] = Number(categoryId);
-
-          // Update bggId if missing
-          if (!existingCategories.docs[0].bggId) {
-            await payload.update({
-              collection: "categories",
-              id: existingCategories.docs[0].id,
-              data: {
-                bggId: category.id,
-              },
-            });
-          }
-        } else {
-          const newCategory = await payload.create({
-            collection: "categories",
-            data: {
-              name: category.value,
-              bggId: category.id,
-            },
-          });
-          const categoryId = newCategory.id;
-          categoryIds.push(Number(categoryId));
-          entityCache.categories[category.value] = Number(categoryId);
-        }
-      }
-    }
-
-    // Create or find mechanics
-    const mechanicIds = [];
-    if (mechanics && Array.isArray(mechanics)) {
-      for (const mechanic of mechanics) {
-        if (!mechanic || !mechanic.value) continue; // Skip if mechanic or mechanic.value is undefined
-
-        // Use cached value if available
-        if (entityCache.mechanics[mechanic.value]) {
-          mechanicIds.push(Number(entityCache.mechanics[mechanic.value]));
-          continue;
-        }
-
-        const existingMechanics = await payload.find({
-          collection: "mechanics",
-          where: {
-            name: {
-              equals: mechanic.value,
-            },
-          },
-        });
-
-        if (existingMechanics.docs.length > 0) {
-          // Mechanic exists, use its ID
-          const mechanicId = existingMechanics.docs[0].id;
-          mechanicIds.push(Number(mechanicId));
-          entityCache.mechanics[mechanic.value] = Number(mechanicId);
-
-          // Update bggId if missing
-          if (!existingMechanics.docs[0].bggId) {
-            await payload.update({
-              collection: "mechanics",
-              id: existingMechanics.docs[0].id,
-              data: {
-                bggId: mechanic.id,
-              },
-            });
-          }
-        } else {
-          const newMechanic = await payload.create({
-            collection: "mechanics",
-            data: {
-              name: mechanic.value,
-              bggId: mechanic.id,
-            },
-          });
-          const mechanicId = newMechanic.id;
-          mechanicIds.push(Number(mechanicId));
-          entityCache.mechanics[mechanic.value] = Number(mechanicId);
-        }
-      }
-    }
-
-    // Create or find artists
-    const artistIds = [];
-    if (artists && Array.isArray(artists)) {
-      for (const artist of artists) {
-        if (!artist || !artist.value) continue; // Skip if artist or artist.value is undefined
-
-        // Use cached value if available
-        if (entityCache.artists[artist.value]) {
-          artistIds.push(Number(entityCache.artists[artist.value]));
-          continue;
-        }
-
-        const existingArtists = await payload.find({
-          collection: "artists",
-          where: {
-            name: {
-              equals: artist.value,
-            },
-          },
-        });
-
-        if (existingArtists.docs.length > 0) {
-          // Artist exists, use its ID
-          const artistId = existingArtists.docs[0].id;
-          artistIds.push(Number(artistId));
-          entityCache.artists[artist.value] = Number(artistId);
-
-          // Update bggId if missing
-          if (artist.id && !existingArtists.docs[0].bggId) {
-            await payload.update({
-              collection: "artists",
-              id: existingArtists.docs[0].id,
-              data: {
-                bggId: artist.id,
-              },
-            });
-          }
-        } else {
-          const newArtist = await payload.create({
-            collection: "artists",
-            data: {
-              name: artist.value,
-              bggId: artist.id,
-            },
-          });
-          const artistId = newArtist.id;
-          artistIds.push(Number(artistId));
-          entityCache.artists[artist.value] = Number(artistId);
-        }
-      }
-    }
-
-    // Create or find types
-    const typeIds = [];
-    if (types && Array.isArray(types)) {
-      for (const type of types) {
-        if (!type || !type.value) continue; // Skip if type or type.value is undefined
-
-        // Use cached value if available
-        if (entityCache.types[type.value]) {
-          typeIds.push(Number(entityCache.types[type.value]));
-          continue;
-        }
-
-        // Find type by name since we might not have BGG IDs for all types
-        const existingTypes = await payload.find({
-          collection: "types",
-          where: {
-            name: {
-              equals: type.value,
-            },
-          },
-        });
-
-        if (existingTypes.docs.length > 0) {
-          // Type exists, use its ID
-          const typeId = existingTypes.docs[0].id;
-          typeIds.push(Number(typeId));
-          entityCache.types[type.value] = Number(typeId);
-
-          // Update the type with BGG ID if missing
-          if (type.id && !("bggId" in existingTypes.docs[0])) {
-            await payload.update({
-              collection: "types",
-              id: existingTypes.docs[0].id,
-              data: {
-                bggId: type.id,
-              } as TypeData,
-            });
-          }
-        } else {
-          // Create new type with BGG ID if available
-          const typeData: TypeData = {
-            name: type.value,
-          };
-
-          // Add BGG ID if it exists
-          if (type.id) {
-            typeData.bggId = type.id;
-          }
-
-          const newType = await payload.create({
-            collection: "types",
-            data: typeData,
-          });
-          const typeId = newType.id;
-          typeIds.push(Number(typeId));
-          entityCache.types[type.value] = Number(typeId);
-        }
-      }
-    }
-
-    // Upload images if available
-    let imageId = null;
-    if (bggGameData && bggGameData.image) {
-      try {
-        // Download the image to a temp file
-        const tempFilePath = await downloadImageToTemp(bggGameData.image);
-
-        if (tempFilePath) {
-          // Get game name for folder structure and alt text
-          let gameName = "unknown-game";
-          if (bggGameData.name) {
-            if (
-              Array.isArray(bggGameData.name) &&
-              bggGameData.name.length > 0
-            ) {
-              const primaryName = bggGameData.name.find(
-                (n: BGGNameItem) => n.type === "primary"
-              );
-              gameName = primaryName?.value || bggGameData.name[0].value;
-            } else if (
-              typeof bggGameData.name === "object" &&
-              "value" in bggGameData.name
-            ) {
-              gameName = bggGameData.name.value;
-            } else if (typeof bggGameData.name === "string") {
-              gameName = bggGameData.name;
-            }
-          }
-
-          // Create a payload file
-          const imageFile = await createPayloadFile(tempFilePath, gameName);
-
-          // Upload to Payload
-          const uploadedImage = await payload.create({
-            collection: "media",
-            data: {
-              alt: gameName,
-            },
-            file: imageFile,
-          });
-
-          imageId = uploadedImage.id;
-
-          // Clean up temp file
-          await unlink(tempFilePath).catch(console.error);
-        }
-      } catch (error) {
-        console.error("Error uploading image:", error);
-      }
-    }
-
-    // Helper function to extract game name
-    function extractGameName(bggGame: BGGGame): string {
-      if (!bggGame.name) return "Unknown Game";
-
-      if (Array.isArray(bggGame.name) && bggGame.name.length > 0) {
-        const primaryName = bggGame.name.find(
-          (n: BGGNameItem) => n.type === "primary"
-        );
-        return primaryName?.value || bggGame.name[0].value;
-      } else if (typeof bggGame.name === "object" && "value" in bggGame.name) {
-        return bggGame.name.value;
-      } else if (typeof bggGame.name === "string") {
-        return bggGame.name;
-      }
-
-      return "Unknown Game";
-    }
-
-    // Prepare game data
-    const gameName = extractGameName(bggGameData);
-
-    const gameData: any = {
-      bggId: bggId,
-      name: gameName,
-      type: typeIds.length > 0 ? typeIds.map((id) => Number(id)) : undefined,
-      // Initialize expansions and implementations arrays
-      expansions: needsProcessing ? game?.expansions || [] : [],
-      implementations: needsProcessing ? game?.implementations || [] : [],
-      // Set baseGame reference if this is an expansion
-      baseGame: isExpansion && baseGameId ? Number(baseGameId) : undefined,
-    };
-
-    // Add original name if different from primary name
-    if (Array.isArray(bggGameData.name) && bggGameData.name.length > 1) {
-      const alternateNames = bggGameData.name.filter(
-        (n: BGGNameItem) => n.type !== "primary"
-      );
-      if (alternateNames.length > 0) {
-        gameData.originalName = alternateNames[0].value;
-      }
-    }
-
-    // Only add fields if they exist in the BGG data
-    if (bggGameData.description) {
-      // Convert plain text description to Lexical editor format
-      gameData.description = formatRichText(bggGameData.description);
-    }
-
-    // Add numeric fields efficiently
-    const numericFields = {
-      yearPublished: bggGameData.yearpublished?.value,
-      minPlayers: bggGameData.minplayers?.value,
-      maxPlayers: bggGameData.maxplayers?.value,
-      playingTime: bggGameData.playingtime?.value,
-      minPlaytime: bggGameData.minplaytime?.value,
-      maxPlaytime: bggGameData.maxplaytime?.value,
-      minAge: bggGameData.minage?.value,
-    };
-
-    Object.entries(numericFields).forEach(([key, value]) => {
-      if (value !== undefined) {
-        gameData[key] = value;
-      }
+    // Create a URL to reuse the GET handler
+    const url = new URL(request.url);
+    url.searchParams.set("id", numericBggId.toString());
+
+    // Create a new request to pass to the GET handler
+    const getRequest = new Request(url.toString(), {
+      headers: request.headers,
     });
 
-    // Add rating and complexity data
-    if (bggGameData.statistics?.ratings?.average?.value) {
-      gameData.userRating = parseFloat(
-        bggGameData.statistics.ratings.average.value.toString()
-      );
-    }
-
-    if (bggGameData.statistics?.ratings?.usersrated?.value) {
-      gameData.userRatedCount = parseInt(
-        bggGameData.statistics.ratings.usersrated.value.toString()
-      );
-    }
-
-    if (bggGameData.statistics?.ratings?.averageweight?.value) {
-      gameData.complexity = parseFloat(
-        bggGameData.statistics.ratings.averageweight.value.toString()
-      );
-    }
-
-    if (bggGameData.statistics?.ratings?.ranks) {
-      const ranks = Array.isArray(bggGameData.statistics.ratings.ranks)
-        ? bggGameData.statistics.ratings.ranks
-        : [bggGameData.statistics.ratings.ranks];
-
-      const overallRank = ranks.find(
-        (r: BGGRank) => r.id === "1" || r.name === "boardgame"
-      );
-      if (overallRank && overallRank.value !== "Not Ranked") {
-        gameData.bggRank = parseInt(overallRank.value);
-      }
-    }
-
-    // Process suggested player counts if available
-    if (bggGameData.poll) {
-      const polls = Array.isArray(bggGameData.poll)
-        ? bggGameData.poll
-        : [bggGameData.poll];
-      const playerCountPoll = polls.find(
-        (p: BGGPoll) => p.name === "suggested_numplayers"
-      );
-
-      if (playerCountPoll && playerCountPoll.results) {
-        const playerCounts = Array.isArray(playerCountPoll.results)
-          ? playerCountPoll.results
-          : [playerCountPoll.results];
-
-        const suggestedPlayerCount = playerCounts.map(
-          (pc: BGGPollResultContainer) => {
-            const votes = pc.result;
-            const voteData = Array.isArray(votes) ? votes : [votes];
-
-            const bestCount =
-              voteData.find((v: BGGPollResult) => v.value === "Best")
-                ?.numvotes || 0;
-            const recommendedCount =
-              voteData.find((v: BGGPollResult) => v.value === "Recommended")
-                ?.numvotes || 0;
-            const notRecommendedCount =
-              voteData.find((v: BGGPollResult) => v.value === "Not Recommended")
-                ?.numvotes || 0;
-
-            return {
-              playerCount: parseInt(pc.numplayers as string),
-              bestCount: parseInt(bestCount as string),
-              recommendedCount: parseInt(recommendedCount as string),
-              notRecommendedCount: parseInt(notRecommendedCount as string),
-            };
-          }
-        );
-
-        if (suggestedPlayerCount.length > 0) {
-          gameData.suggestedPlayerCount = suggestedPlayerCount;
-        }
-      }
-
-      // Get language dependence
-      const languagePoll = polls.find(
-        (p: BGGPoll) => p.name === "language_dependence"
-      );
-      if (languagePoll && languagePoll.results) {
-        const results = Array.isArray(languagePoll.results.result)
-          ? languagePoll.results.result
-          : [languagePoll.results.result];
-
-        // Find the highest voted language dependence
-        if (results.length > 0) {
-          const sortedResults = [...results].sort(
-            (a: BGGPollResult, b: BGGPollResult) =>
-              parseInt(b.numvotes as string) - parseInt(a.numvotes as string)
-          );
-
-          const mapping: Record<string, string> = {
-            "No necessary in-game text": "0",
-            "Some necessary text - easily memorized or small crib sheet": "1",
-            "Moderate in-game text - needs crib sheet or paste ups": "2",
-            "Extensive use of text - massive conversion needed to be playable":
-              "3",
-            "Unplayable in another language": "4",
-          };
-
-          const topResult = sortedResults[0];
-          if (topResult.value in mapping) {
-            gameData.languageDependence = mapping[topResult.value];
-          }
-        }
-      }
-    }
-
-    // Add category, mechanic, designer, and publisher data
-    if (categoryIds.length > 0) {
-      gameData.categories = categoryIds.map((id) => Number(id));
-    }
-
-    if (mechanicIds.length > 0) {
-      gameData.mechanics = mechanicIds.map((id) => Number(id));
-    }
-
-    if (designerIds.length > 0) {
-      gameData.designers = designerIds.map((id) => Number(id));
-    }
-
-    if (publisherIds.length > 0) {
-      gameData.publishers = publisherIds.map((id) => Number(id));
-    }
-
-    if (artistIds.length > 0) {
-      gameData.artists = artistIds.map((id) => Number(id));
-    }
-
-    // Process accessories
-    const accessoryIds = [];
-    if (accessories && accessories.length > 0) {
-      // Extract all accessory BGG IDs
-      const accessoryBggIds = accessories
-        .filter((accessory: BGGLinkedEntity) => accessory && accessory.id)
-        .map((accessory: BGGLinkedEntity) => String(accessory.id));
-
-      // Check which accessories already exist in a single batch query
-      const existingAccessoryMap = await batchCheckExistence(
-        "accessories",
-        accessoryBggIds
-      );
-
-      for (const accessory of accessories as BGGLinkedEntity[]) {
-        if (!accessory || !accessory.value) {
-          continue; // Skip if accessory or accessory.value is undefined
-        }
-
-        const accessoryBggId = String(accessory.id);
-
-        // Use cached value if available
-        if (entityCache.accessories[accessory.value]) {
-          accessoryIds.push(Number(entityCache.accessories[accessory.value]));
-        } else if (existingAccessoryMap[accessoryBggId]) {
-          const accessoryId = existingAccessoryMap[accessoryBggId];
-          accessoryIds.push(Number(accessoryId));
-
-          // Convert string ID to number for entityCache
-          entityCache.accessories[accessory.value] = Number(accessoryId);
-          continue;
-        }
-
-        // Add delay between accessory processing
-        await delay(ACCESSORY_RATE_LIMIT_DELAY);
-      }
-    }
-
-    // Add accessories to game data
-    if (accessoryIds.length > 0) {
-      // Ensure all accessory IDs are numbers
-      gameData.accessories = accessoryIds.map((id) => Number(id));
-    }
-
-    // Add image reference if available
-    if (imageId) {
-      gameData.images = [Number(imageId)];
-    }
-
-    // Create a new game or update the existing one
-    if (needsProcessing) {
-      // Update existing game with new data
-      game = await payload.update({
-        collection: "games",
-        id: game!.id,
-        data: gameData,
-      });
-    } else {
-      // Create a new game with the prepared data
-      game = await payload.create({
-        collection: "games",
-        data: gameData,
-      });
-
-      // If this is an expansion, update the base game's expansions array
-      if (isExpansion && baseGameId) {
-        try {
-          console.log(
-            `This is an expansion for base game ID: ${baseGameId}, updating base game`
-          );
-
-          // Get the base game to see its current expansions
-          const baseGame = await payload.findByID({
-            collection: "games",
-            id: baseGameId,
-          });
-
-          // Get existing expansion IDs, properly handling the case where they might be objects
-          const existingExpansionIds =
-            baseGame.expansions?.map((exp) =>
-              typeof exp === "object" ? exp.id : exp
-            ) || [];
-
-          // Add this expansion to the list if it's not already there
-          if (!existingExpansionIds.includes(game.id)) {
-            const updatedExpansions = [...existingExpansionIds, game.id].map(
-              (id) => Number(id)
-            );
-
-            // Update the base game with the new expansion
-            await payload.update({
-              collection: "games",
-              id: baseGameId,
-              data: {
-                expansions: updatedExpansions,
-              },
-            });
-            console.log(
-              `Updated base game ${baseGame.name} with expansion ${game.name}`
-            );
-          } else {
-            console.log(
-              `Base game ${baseGame.name} already has this expansion`
-            );
-          }
-        } catch (error) {
-          console.error(`Error updating base game with expansion:`, error);
-        }
-      }
-    }
-
-    // Process expansions and implementations asynchronously
-    // This allows us to return the response to the user faster
-    const processRelationships = async () => {
-      try {
-        // Process expansions if there are any and we're not already processing expansions
-        if (expansions.length > 0 && !isProcessingExpansions) {
-          const expansionIds = [];
-          // Increase delay to avoid rate limiting
-          const RATE_LIMIT_DELAY = 2000; // 2 second delay between calls (increased from 500ms)
-          // Track consecutive failures to implement adaptive backoff
-          let consecutiveFailures = 0;
-          const MAX_CONSECUTIVE_FAILURES = 3;
-
-          const protocol = request.headers.get("x-forwarded-proto") || "http";
-          const host = request.headers.get("host") || "";
-          const expansionApiUrl = `${protocol}://${host}/api/games/add?processingExpansions=true`;
-
-          // Extract all expansion BGG IDs
-          const expansionBggIds = expansions
-            .filter((expansion: BGGLinkedEntity) => expansion && expansion.id)
-            .map((expansion: BGGLinkedEntity) => String(expansion.id));
-
-          // Batch check which expansions already exist
-          const existingExpansionMap = await batchCheckExistence(
-            "games",
-            expansionBggIds
-          );
-
-          for (const expansion of expansions as BGGLinkedEntity[]) {
-            try {
-              // First check if this expansion already exists in our database
-              const expansionBggId = String(expansion.id);
-
-              // Check if it was found in our batch query
-              if (existingExpansionMap[expansionBggId]) {
-                const existingExpansionId =
-                  existingExpansionMap[expansionBggId];
-                expansionIds.push(Number(existingExpansionId));
-                continue;
-              }
-
-              // Call our games/add endpoint to create the expansion
-              const response = await fetch(expansionApiUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  bggId: expansion.id,
-                  isExpansion: true,
-                  baseGameId: game.id,
-                }),
-              });
-
-              if (!response.ok) {
-                // If we get a 429, increase the consecutive failures counter
-                if (response.status === 429) {
-                  consecutiveFailures++;
-
-                  // Implement exponential backoff for consecutive failures
-                  if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    const backoffTime = Math.min(
-                      30000,
-                      RATE_LIMIT_DELAY *
-                        Math.pow(
-                          2,
-                          consecutiveFailures - MAX_CONSECUTIVE_FAILURES
-                        )
-                    );
-                    await delay(backoffTime);
-                  }
-                }
-
-                console.error(
-                  `Failed to process expansion ${expansion.value} (${expansion.id}): ${response.statusText}`
-                );
-                continue;
-              }
-
-              // Reset consecutive failures on success
-              consecutiveFailures = 0;
-
-              const expansionData = await response.json();
-              if (expansionData?.id) {
-                expansionIds.push(Number(expansionData.id));
-                // Also update our existence cache
-                updateExistenceCache("games", expansionBggId, expansionData.id);
-              }
-
-              // Apply rate limiting between expansion calls
-              await delay(RATE_LIMIT_DELAY);
-            } catch (error) {
-              console.error(
-                `Error processing expansion ${expansion.value}:`,
-                error
-              );
-            }
-          }
-
-          // Update the game with the expansion IDs
-          if (expansionIds.length > 0) {
-            try {
-              // First get the current expansions to avoid overwriting any existing ones
-              const currentGameData = await payload.findByID({
-                collection: "games",
-                id: game.id,
-              });
-
-              // Combine existing and new expansion IDs, avoiding duplicates
-              const existingExpansionIds =
-                currentGameData.expansions?.map((exp) =>
-                  typeof exp === "object" ? exp.id : exp
-                ) || [];
-
-              // Create a Set to remove duplicates
-              const combinedExpansionIds = [
-                ...new Set([...existingExpansionIds, ...expansionIds]),
-              ].map((id) => Number(id)); // Ensure all IDs are numbers
-
-              // Update the game with the combined list of expansions
-              await payload.update({
-                collection: "games",
-                id: game.id,
-                data: {
-                  expansions: combinedExpansionIds,
-                  // Mark as no longer processing if this was the last step
-                  processing: implementations.length === 0,
-                },
-              });
-            } catch (error) {
-              console.error(
-                `Error updating game ${game.name} with expansions:`,
-                error
-              );
-            }
-          }
-        }
-
-        // Process implementations if there are any
-        if (implementations.length > 0) {
-          const implementationIds = [];
-          // Increase delay to avoid rate limiting
-          const RATE_LIMIT_DELAY = 2000; // 2 second delay between calls (increased from 500ms)
-          const protocol = request.headers.get("x-forwarded-proto") || "http";
-          const host = request.headers.get("host") || "";
-          const implementationApiUrl = `${protocol}://${host}/api/games/add?processingExpansions=true`;
-
-          for (const implementation of implementations) {
-            try {
-              // First check if this implementation already exists in our database
-              const existingImplementation = await payload.find({
-                collection: "games",
-                where: {
-                  bggId: {
-                    equals: Number(implementation.id),
-                  },
-                },
-              });
-
-              if (existingImplementation.docs.length > 0) {
-                implementationIds.push(
-                  Number(existingImplementation.docs[0].id)
-                );
-                continue;
-              }
-
-              // Call the same endpoint to add each implementation, with a flag to avoid recursion
-              const response = await fetch(implementationApiUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ bggId: implementation.id }),
-              });
-
-              const result = await response.json();
-
-              if (result?.game?.id) {
-                implementationIds.push(Number(result.game.id));
-              }
-
-              // Add delay before processing next implementation to avoid rate limiting
-              await delay(RATE_LIMIT_DELAY);
-            } catch (error) {
-              console.error(
-                `Error adding implementation ${implementation.value}:`,
-                error
-              );
-              // Continue with next implementation even if this one fails
-              await delay(RATE_LIMIT_DELAY);
-            }
-          }
-
-          // Update the game with the implementation IDs if any were successfully added
-          if (implementationIds.length > 0) {
-            try {
-              await payload.update({
-                collection: "games",
-                id: game.id,
-                data: {
-                  implementations: implementationIds.map((id) => Number(id)), // Ensure all IDs are numbers
-                  processing: false, // Mark as no longer processing
-                },
-              });
-            } catch (error) {
-              console.error(
-                `Error updating game ${game.name} with implementations:`,
-                error
-              );
-            }
-          }
-        }
-
-        // Update the game to mark processing as complete
-        await payload.update({
-          collection: "games",
-          id: game.id,
-          data: {
-            processing: false,
-          },
-        });
-      } catch (error) {
-        console.error(`Error in async processing for game ${game.id}:`, error);
-      }
-    };
-
-    // Start async processing without waiting for it to complete
-    processRelationships().catch((error) => {
-      console.error("Error in async relationship processing:", error);
-    });
-
-    return NextResponse.json({
-      game,
-      message: "Game successfully added from BGG",
-      processing: expansions.length > 0 || implementations.length > 0,
-    });
+    // Reuse the GET handler to avoid duplicating logic
+    return GET(getRequest);
   } catch (error) {
-    console.error("Error adding game from BGG:", error);
+    console.error("Error in POST handler:", error);
     return NextResponse.json(
-      { error: "Failed to add game from BGG" },
+      { error: "Failed to process game addition request" },
       { status: 500 }
     );
   }
