@@ -151,6 +151,56 @@ export async function GET(request: Request) {
       // Check if this is an expansion
       const isExpansion = formattedData.type === "boardgameexpansion";
 
+      // Initialize update data
+      const updateData: any = {
+        processed: true, // Mark as processed
+      };
+
+      // If this is an expansion, set the baseGame field
+      if (
+        isExpansion &&
+        formattedData.baseGames &&
+        formattedData.baseGames.length > 0
+      ) {
+        // Set the first base game as the parent
+        const baseGame = formattedData.baseGames[0];
+        if (baseGame && baseGame.id) {
+          console.log(
+            `Setting base game for expansion ${formattedData.name}: ${baseGame.name} (ID: ${baseGame.id})`
+          );
+
+          // First try to look up the base game to get its internal ID
+          try {
+            const baseGameResponse = await payload.find({
+              collection: "games",
+              where: { bggId: { equals: Number(baseGame.id) } },
+            });
+
+            if (baseGameResponse.docs.length > 0) {
+              // If found by bggId, use its internal ID
+              const foundBaseGame = baseGameResponse.docs[0];
+              console.log(
+                `Found base game by bggId ${baseGame.id}: ${foundBaseGame.name} (internal ID: ${foundBaseGame.id})`
+              );
+              updateData.baseGame = foundBaseGame.id;
+            } else {
+              // If not found, use the bggId directly - it will be resolved later
+              console.log(
+                `Base game with bggId ${baseGame.id} not found, using bggId directly`
+              );
+              updateData.baseGame = baseGame.id;
+            }
+          } catch (error) {
+            console.error(
+              `Error looking up base game with bggId ${baseGame.id}:`,
+              error
+            );
+            // Fall back to using the ID directly
+            updateData.baseGame = baseGame.id;
+          }
+        }
+      }
+
       // If not an expansion, add expansions relationship
       if (!isExpansion && formattedData.expansions) {
         relationships.push({
@@ -159,11 +209,6 @@ export async function GET(request: Request) {
           collection: "games",
         });
       }
-
-      // Initialize update data
-      const updateData: any = {
-        processed: true, // Mark as processed
-      };
 
       // Upload image if available and not already present
       if (formattedData.image && (!item.images || item.images.length === 0)) {

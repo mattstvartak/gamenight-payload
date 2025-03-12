@@ -163,6 +163,51 @@ export async function GET(request: Request) {
     // Check if this is an expansion
     const isExpansion = formattedGame.type === "boardgameexpansion";
 
+    // If this is an expansion, set the baseGame field
+    if (
+      isExpansion &&
+      formattedGame.baseGames &&
+      formattedGame.baseGames.length > 0
+    ) {
+      // Set the first base game as the parent
+      const baseGame = formattedGame.baseGames[0];
+      if (baseGame && baseGame.id) {
+        console.log(
+          `Setting base game for expansion ${formattedGame.name}: ${baseGame.name} (ID: ${baseGame.id})`
+        );
+
+        // First try to look up the base game to get its internal ID
+        try {
+          const baseGameResponse = await payload.find({
+            collection: "games",
+            where: { bggId: { equals: Number(baseGame.id) } },
+          });
+
+          if (baseGameResponse.docs.length > 0) {
+            // If found by bggId, use its internal ID
+            const foundBaseGame = baseGameResponse.docs[0];
+            console.log(
+              `Found base game by bggId ${baseGame.id}: ${foundBaseGame.name} (internal ID: ${foundBaseGame.id})`
+            );
+            gameData.baseGame = foundBaseGame.id;
+          } else {
+            // If not found, use the bggId directly - it will be resolved later
+            console.log(
+              `Base game with bggId ${baseGame.id} not found, using bggId directly`
+            );
+            gameData.baseGame = baseGame.id;
+          }
+        } catch (error) {
+          console.error(
+            `Error looking up base game with bggId ${baseGame.id}:`,
+            error
+          );
+          // Fall back to using the ID directly
+          gameData.baseGame = baseGame.id;
+        }
+      }
+    }
+
     // Start image upload in parallel with relationship processing
     let imagePromise;
     if (formattedGame.image) {

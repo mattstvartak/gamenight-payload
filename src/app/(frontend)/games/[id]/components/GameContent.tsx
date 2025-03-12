@@ -512,7 +512,7 @@ export const GameContent = ({ game }: { game: GameType }) => {
 
                     return (
                       <Link
-                        href={`/games/${exp.bggId || exp.id}`}
+                        href={`/games/expansions/${exp.bggId || exp.id}`}
                         key={index}
                         className="block"
                       >
