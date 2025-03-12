@@ -21,6 +21,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Game ID is required" }, { status: 400 });
   }
 
+  // Process accessories flag - we'll queue accessories processing if true
+  const processAccessories = searchParams.get("processAccessories") !== "false";
+
   try {
     // Local cache for this import session
     const entityCache = new Map(globalEntityCache);
@@ -181,6 +184,12 @@ export async function GET(request: Request) {
         items: formattedGame.implementations,
         collection: "games",
       },
+      // Add accessories relationship
+      {
+        name: "accessories",
+        items: formattedGame.accessories,
+        collection: "accessories",
+      },
     ];
 
     // If not an expansion, add expansions relationship
@@ -195,6 +204,11 @@ export async function GET(request: Request) {
     // Process all relationships in parallel
     for (const rel of relationships) {
       if (rel.items && Array.isArray(rel.items) && rel.items.length > 0) {
+        if (rel.name === "accessories") {
+          console.log(
+            `Processing ${rel.items.length} accessories for game ${formattedGame.name}`
+          );
+        }
         relationshipPromises.push(
           processRelationships(
             payload,
@@ -210,6 +224,20 @@ export async function GET(request: Request) {
 
     // Wait for all relationship processing to complete in parallel
     await Promise.all([...relationshipPromises].filter(Boolean));
+
+    // Log accessory processing results
+    if (gameData.accessories && gameData.accessories.length > 0) {
+      console.log(
+        `Successfully processed ${gameData.accessories.length} accessories for game "${gameData.name}"`
+      );
+    } else if (
+      formattedGame.accessories &&
+      formattedGame.accessories.length > 0
+    ) {
+      console.warn(
+        `Warning: Game "${gameData.name}" has ${formattedGame.accessories.length} accessories in BGG data but none were saved`
+      );
+    }
 
     // Ensure bggId is definitely a number type
     if (!gameData.bggId || isNaN(gameData.bggId)) {
@@ -236,15 +264,19 @@ export async function GET(request: Request) {
       data: gameData,
     });
 
-    // Update the game to mark it as processed
+    // Update the game to mark it as processing
     if (newGame?.id) {
-      console.log(`Marking game ${newGame.id} as processed`);
-      await payload.update({
-        collection: "games",
-        id: newGame.id,
-        data: {
-          processed: true,
-        },
+      console.log(
+        `Game ${newGame.id} created, queueing related items for processing`
+      );
+
+      // Queue background processing for all related items - NO LONGER AWAITING
+      // This allows the API to return immediately while processing continues in the background
+      queueRelatedItemsForProcessing(newGame, formattedGame).catch((error) => {
+        console.error(
+          `Background processing error for game ${newGame.id}:`,
+          error
+        );
       });
     }
 
@@ -372,7 +404,127 @@ function formatDescriptionAsRichText(description: string) {
     if (!description || typeof description !== "string") {
       description = "";
     }
-    return formatRichText(description);
+
+    // Simple processing for just the critical HTML entities
+    // Handle quotes and newlines which are the most important
+    let processedText = description;
+    processedText = processedText.replace(/&quot;/g, '"');
+    processedText = processedText.replace(/&#34;/g, '"');
+    processedText = processedText.replace(/&apos;/g, "'");
+    processedText = processedText.replace(/&#39;/g, "'");
+    processedText = processedText.replace(/&lt;/g, "<");
+    processedText = processedText.replace(/&gt;/g, ">");
+    processedText = processedText.replace(/&amp;/g, "&");
+
+    // Add additional typographic entities using character codes
+    const emDash = String.fromCharCode(8212); // &mdash; (—)
+    const enDash = String.fromCharCode(8211); // &ndash; (–)
+    const ldquo = String.fromCharCode(8220); // &ldquo; (")
+    const rdquo = String.fromCharCode(8221); // &rdquo; (")
+    const hellip = String.fromCharCode(8230); // &hellip; (…)
+    const lsquo = String.fromCharCode(8216); // &lsquo; (')
+    const rsquo = String.fromCharCode(8217); // &rsquo; (')
+    const bull = String.fromCharCode(8226); // &bull; (•)
+
+    // Currency symbols
+    const euro = String.fromCharCode(8364); // &euro; (€)
+    const pound = String.fromCharCode(163); // &pound; (£)
+    const yen = String.fromCharCode(165); // &yen; (¥)
+    const cent = String.fromCharCode(162); // &cent; (¢)
+
+    // Special symbols
+    const copy = String.fromCharCode(169); // &copy; (©)
+    const reg = String.fromCharCode(174); // &reg; (®)
+    const trade = String.fromCharCode(8482); // &trade; (™)
+
+    // Apply all replacements
+    processedText = processedText.replace(/&mdash;/g, emDash);
+    processedText = processedText.replace(/&ndash;/g, enDash);
+    processedText = processedText.replace(/&ldquo;/g, ldquo);
+    processedText = processedText.replace(/&rdquo;/g, rdquo);
+    processedText = processedText.replace(/&hellip;/g, hellip);
+    processedText = processedText.replace(/&lsquo;/g, lsquo);
+    processedText = processedText.replace(/&rsquo;/g, rsquo);
+    processedText = processedText.replace(/&bull;/g, bull);
+    processedText = processedText.replace(/&euro;/g, euro);
+    processedText = processedText.replace(/&pound;/g, pound);
+    processedText = processedText.replace(/&yen;/g, yen);
+    processedText = processedText.replace(/&cent;/g, cent);
+    processedText = processedText.replace(/&copy;/g, copy);
+    processedText = processedText.replace(/&reg;/g, reg);
+    processedText = processedText.replace(/&trade;/g, trade);
+
+    // Handle newlines - important for paragraph separation
+    processedText = processedText.replace(/&#10;/g, "\n");
+    processedText = processedText.replace(/&#x0A;/g, "\n");
+    processedText = processedText.replace(/&#xA;/g, "\n");
+
+    // Handle generic numeric HTML entities with a simple function
+    processedText = processedText.replace(/&#(\d+);/g, function (match, dec) {
+      return String.fromCharCode(parseInt(dec, 10));
+    });
+
+    // Split into paragraphs
+    const paragraphs = processedText.split("\n");
+    const children = [];
+
+    // Create paragraph nodes
+    for (let i = 0; i < paragraphs.length; i++) {
+      const trimmedText = paragraphs[i].trim();
+      if (trimmedText) {
+        children.push({
+          type: "paragraph",
+          direction: "ltr",
+          format: "",
+          indent: 0,
+          version: 1,
+          children: [
+            {
+              detail: 0,
+              format: 0,
+              mode: "normal",
+              style: "",
+              text: trimmedText,
+              type: "text",
+              version: 1,
+            },
+          ],
+        });
+      }
+    }
+
+    // Ensure at least one paragraph exists
+    if (children.length === 0) {
+      children.push({
+        type: "paragraph",
+        direction: "ltr",
+        format: "",
+        indent: 0,
+        version: 1,
+        children: [
+          {
+            detail: 0,
+            format: 0,
+            mode: "normal",
+            style: "",
+            text: "",
+            type: "text",
+            version: 1,
+          },
+        ],
+      });
+    }
+
+    return {
+      root: {
+        type: "root",
+        format: "",
+        indent: 0,
+        version: 1,
+        direction: "ltr",
+        children: children,
+      },
+    };
   } catch (error) {
     console.error("Error formatting rich text:", error);
     return {
@@ -648,5 +800,235 @@ export async function POST(request: Request) {
       { error: "Failed to process game addition request" },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Queue background processing for all related items (expansions, implementations, accessories)
+ * Updates the parent game's processed state only after all items have been processed
+ */
+async function queueRelatedItemsForProcessing(
+  newGame: any,
+  formattedGame: any
+) {
+  try {
+    console.log(`Queueing related items for processing for game ${newGame.id}`);
+
+    // Immediately mark the game as in processing state
+    try {
+      const payload = await getPayload({ config });
+      await payload.update({
+        collection: "games",
+        id: newGame.id,
+        data: {
+          processed: false,
+        },
+      });
+      console.log(`Game ${newGame.id} marked as processing`);
+    } catch (updateError) {
+      console.error(
+        `Failed to mark game ${newGame.id} as processing:`,
+        updateError
+      );
+    }
+
+    // Define interface for related items
+    interface RelatedItem {
+      id: string;
+      collection: "games" | "accessories";
+      type: "accessory" | "expansion" | "implementation";
+    }
+
+    const relatedItems: RelatedItem[] = [];
+
+    // Helper function to safely extract string IDs
+    function extractId(item: any): string | null {
+      if (!item) return null;
+
+      // If item is a string, use it directly
+      if (typeof item === "string") return item;
+
+      // If item is an object with an id property, use that
+      if (typeof item === "object" && item.id) return item.id;
+
+      // Otherwise log and return null
+      console.warn(`Could not extract ID from item:`, item);
+      return null;
+    }
+
+    // Collect all related items to process
+    if (newGame.accessories && newGame.accessories.length > 0) {
+      console.log(
+        `Queueing ${newGame.accessories.length} accessories for processing`
+      );
+      newGame.accessories.forEach((accessory: any) => {
+        const id = extractId(accessory);
+        if (id) {
+          relatedItems.push({
+            id: id,
+            collection: "accessories",
+            type: "accessory",
+          });
+        }
+      });
+    }
+
+    if (newGame.expansions && newGame.expansions.length > 0) {
+      console.log(
+        `Queueing ${newGame.expansions.length} expansions for processing`
+      );
+      newGame.expansions.forEach((expansion: any) => {
+        const id = extractId(expansion);
+        if (id) {
+          relatedItems.push({
+            id: id,
+            collection: "games",
+            type: "expansion",
+          });
+        }
+      });
+    }
+
+    if (newGame.implementations && newGame.implementations.length > 0) {
+      console.log(
+        `Queueing ${newGame.implementations.length} implementations for processing`
+      );
+      newGame.implementations.forEach((implementation: any) => {
+        const id = extractId(implementation);
+        if (id) {
+          relatedItems.push({
+            id: id,
+            collection: "games",
+            type: "implementation",
+          });
+        }
+      });
+    }
+
+    // Log the actual items we're processing with their IDs
+    if (relatedItems.length > 0) {
+      console.log(
+        `Items to process:`,
+        relatedItems.map((item) => `${item.type} ${item.id}`)
+      );
+    } else {
+      console.log(`No related items to process for game ${newGame.id}`);
+
+      // No related items to process, mark game as processed immediately
+      console.log(`No related items, marking game ${newGame.id} as processed`);
+      const payload = await getPayload({ config });
+      await payload.update({
+        collection: "games",
+        id: newGame.id,
+        data: {
+          processed: true,
+        },
+      });
+
+      return;
+    }
+
+    console.log(`Starting processing for ${relatedItems.length} related items`);
+
+    // Get the base URL from environment or default to http://localhost:3000
+    const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
+
+    // Process each item and track all processing promises
+    const processingPromises = relatedItems.map(async (item) => {
+      try {
+        // We add a small delay to avoid hammering the server with too many requests at once
+        const delay = Math.random() * 5000; // Random delay up to 5 seconds
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        // Make a request to the update endpoint
+        // Ensure we have a valid absolute URL
+        let updateUrl: URL;
+        try {
+          // Try to construct a proper URL
+          updateUrl = new URL("/api/games/update", baseUrl);
+        } catch (urlError) {
+          // Fallback if the baseUrl is invalid
+          console.warn(
+            `Invalid base URL: ${baseUrl}, falling back to localhost`
+          );
+          updateUrl = new URL("/api/games/update", "http://localhost:3000");
+        }
+
+        // Add query parameters
+        updateUrl.searchParams.set("id", item.id);
+        updateUrl.searchParams.set("collection", item.collection);
+
+        console.log(
+          `Processing ${item.type} ${item.id} with URL: ${updateUrl.toString()}`
+        );
+
+        // Use fetch to make the request
+        const response = await fetch(updateUrl.toString());
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(
+            `Error updating ${item.type} ${item.id}. Status: ${response.status}. Response:`,
+            errorText
+          );
+          return false;
+        } else {
+          const result = await response.json();
+          console.log(
+            `Successfully processed ${item.type} ${item.id}. Response:`,
+            result?.message || "No message returned"
+          );
+          return true;
+        }
+      } catch (error) {
+        console.error(`Error processing ${item.type} ${item.id}:`, error);
+        return false;
+      }
+    });
+
+    // Wait for all items to be processed
+    const results = await Promise.all(processingPromises);
+
+    // Count successful and failed processing attempts
+    const successCount = results.filter((result) => result === true).length;
+    const failureCount = results.length - successCount;
+
+    console.log(
+      `Processing complete: ${successCount} successful, ${failureCount} failed`
+    );
+
+    // Mark the parent game as processed now that all related items are done
+    console.log(`Marking parent game ${newGame.id} as processed`);
+    const payload = await getPayload({ config });
+    await payload.update({
+      collection: "games",
+      id: newGame.id,
+      data: {
+        processed: true,
+      },
+    });
+
+    console.log(`Game ${newGame.id} and all related items processed`);
+  } catch (error) {
+    console.error("Error processing related items:", error);
+
+    // If there was an error in our processing logic, still try to mark the game as processed
+    // so it doesn't get stuck in an unprocessed state indefinitely
+    try {
+      console.log(`Marking game ${newGame.id} as processed despite errors`);
+      const payload = await getPayload({ config });
+      await payload.update({
+        collection: "games",
+        id: newGame.id,
+        data: {
+          processed: true,
+        },
+      });
+    } catch (updateError) {
+      console.error(
+        `Failed to mark game ${newGame.id} as processed:`,
+        updateError
+      );
+    }
   }
 }

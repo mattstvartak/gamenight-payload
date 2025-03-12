@@ -1,29 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  BookOpen,
-  Calendar,
-  Clock,
-  Heart,
-  MessageSquare,
-  Share,
-  Star,
-  Users,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { Suspense } from "react";
-
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { GameReview } from "@/components/game-review";
-import { RichText } from "@payloadcms/richtext-lexical/react";
 import { Header } from "@/components/header";
 import {
   Game as GameType,
@@ -36,15 +14,7 @@ import {
 import { GameSkeleton } from "@/app/(frontend)/games/[id]/components/GameSkeleton";
 import { GameContent } from "@/app/(frontend)/games/[id]/components/GameContent";
 import { GameProcessingRefresher } from "@/app/(frontend)/games/[id]/components/GameProcessingRefresher";
-
-// Define the review interface since it's not directly available in payload-types
-interface Review {
-  author: string;
-  avatar: string;
-  rating: number;
-  date: string;
-  content: string;
-}
+import { GameRelatedItemProcessor } from "@/app/(frontend)/games/[id]/components/GameRelatedItemProcessor";
 
 // Define the response from the API
 interface GameResponse {
@@ -154,8 +124,6 @@ async function getGameDetails(id: string): Promise<GameResponse> {
     try {
       const data = await response.json();
 
-      console.log("Game data", data);
-
       if (!data) {
         console.error("API returned invalid game data");
         return {
@@ -231,7 +199,9 @@ export default async function GameDetailsPage({
 }: {
   params: { id: string };
 }) {
-  const id = params.id;
+  const pageParams = await params;
+  const id = pageParams.id;
+
   const {
     game: gameData,
     error,
@@ -264,6 +234,8 @@ export default async function GameDetailsPage({
         {processingInBackground && (
           <GameProcessingRefresher gameId={id} initialMessage={message} />
         )}
+
+        {gameData && <GameRelatedItemProcessor game={gameData} />}
 
         <div className="mb-6">
           <Link

@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { useState, useEffect } from "react";
 import {
   BookOpen,
   Calendar,
@@ -17,6 +19,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { RichText } from "@payloadcms/richtext-lexical/react";
+import { toast } from "@/components/ui/use-toast";
+import { useUser } from "@/lib/hooks/useUser";
 
 import {
   Game as GameType,
@@ -25,9 +29,98 @@ import {
   Publisher,
   Category,
   Mechanic,
+  Accessory,
 } from "@/payload-types";
 
 export const GameContent = ({ game }: { game: GameType }) => {
+  const [isLiked, setIsLiked] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const { user } = useUser();
+
+  // Check if game is in user's likes on component mount
+  useEffect(() => {
+    const checkIfLiked = async () => {
+      if (!user?.id) return;
+
+      try {
+        // Make sure we're using the game id as a string to match Payload's expectation
+        const gameId = String(game.id);
+
+        const response = await fetch(
+          `/api/likes/check?gameId=${gameId}&userId=${user.id}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setIsLiked(data.isLiked);
+          console.log(`Game ${gameId} isLiked check result:`, data.isLiked);
+        }
+      } catch (error) {
+        console.error("Error checking like status:", error);
+      }
+    };
+
+    checkIfLiked();
+  }, [game.id, user?.id]);
+
+  // Toggle like status
+  const toggleLike = async () => {
+    if (!user?.id) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to like this game",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Make sure we're using the game id as a string to match Payload's expectation
+      const gameId = String(game.id);
+
+      const response = await fetch("/api/likes/toggle", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: gameId,
+          collection: "games",
+          userId: user.id,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setIsLiked(data.isLiked);
+        console.log("Like toggled successfully:", data);
+        toast({
+          title: data.isLiked ? "Added to likes" : "Removed from likes",
+          description: data.isLiked
+            ? `${game.name} has been added to your likes`
+            : `${game.name} has been removed from your likes`,
+        });
+      } else {
+        const error = await response.json();
+        console.error("Error response from API:", error);
+        toast({
+          title: "Error",
+          description: error.error || "Something went wrong",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update likes. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Extract the first image URL or use a placeholder
   const imageUrl =
     game.images && game.images.length > 0
@@ -85,6 +178,57 @@ export const GameContent = ({ game }: { game: GameType }) => {
       )
     : [];
 
+  // Helper function to determine if an item is still processing
+  const isItemProcessing = (item: any) => {
+    if (!item) return false;
+    // For items with a direct processing flag
+    if (typeof item.processed !== "undefined") return item.processed === false;
+    // For items with the processing field (like accessories)
+    if (typeof item.processing !== "undefined") return item.processing === true;
+    // Default case
+    return false;
+  };
+
+  // Helper function to get the appropriate image
+  const getItemImage = (item: any, defaultAlt: string) => {
+    // If item is just an ID (not populated yet), or item is still processing
+    if (typeof item === "number" || isItemProcessing(item)) {
+      return {
+        src: "/processing-placeholder.svg",
+        alt: `${defaultAlt} (Processing)`,
+        className: "object-cover opacity-70",
+        shouldShow: true,
+      };
+    }
+
+    // Regular case - extract image URL from the item
+    const images = item.images || [];
+    const imageData = images[0];
+
+    // If the item is processed but has no images, don't show anything
+    if (!imageData) {
+      return {
+        shouldShow: false,
+        src: "",
+        alt: "",
+        className: "",
+      };
+    }
+
+    let src = "/placeholder.svg";
+    if (typeof imageData !== "number") {
+      src =
+        imageData.sizes?.thumbnail?.url || imageData.url || "/placeholder.svg";
+    }
+
+    return {
+      src: `${src}?height=64&width=64`,
+      alt: item.name || defaultAlt,
+      className: "object-cover",
+      shouldShow: true,
+    };
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-8">
       <div className="space-y-4">
@@ -101,8 +245,16 @@ export const GameContent = ({ game }: { game: GameType }) => {
           <Button className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700">
             Add to Collection
           </Button>
-          <Button variant="outline" size="icon">
-            <Heart className="h-4 w-4" />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggleLike}
+            disabled={isLoading}
+            className={isLiked ? "text-red-500 hover:text-red-600" : ""}
+          >
+            <Heart
+              className={`h-4 w-4 ${isLiked ? "fill-current text-red-500" : ""}`}
+            />
           </Button>
           <Button variant="outline" size="icon">
             <Share className="h-4 w-4" />
@@ -304,6 +456,12 @@ export const GameContent = ({ game }: { game: GameType }) => {
                 Accessories
               </TabsTrigger>
               <TabsTrigger
+                value="versions"
+                className="flex-1 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-600 data-[state=active]:text-white"
+              >
+                Versions
+              </TabsTrigger>
+              <TabsTrigger
                 value="artists"
                 className="flex-1 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-600 data-[state=active]:text-white"
               >
@@ -348,35 +506,46 @@ export const GameContent = ({ game }: { game: GameType }) => {
                   game.expansions.map((expansion, index) => {
                     // Assert that expansion is always a GameType
                     const exp = expansion as GameType;
+
+                    // Get image info for this expansion
+                    const imageInfo = getItemImage(exp, "Unknown Expansion");
+
                     return (
-                      <Card
+                      <Link
+                        href={`/games/${exp.bggId || exp.id}`}
                         key={index}
-                        className="bg-background/50 border-muted"
+                        className="block"
                       >
-                        <CardContent className="p-4 flex items-center gap-4">
-                          <div className="h-16 w-16 relative rounded overflow-hidden flex-shrink-0">
-                            <Image
-                              src={
-                                exp.images?.[0] &&
-                                typeof exp.images[0] !== "number"
-                                  ? `${(exp.images[0] as Media).sizes?.thumbnail?.url || "/placeholder.svg"}?height=64&width=64`
-                                  : "/placeholder.svg?height=64&width=64"
-                              }
-                              alt={exp.name || "Unknown Expansion"}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                          <div>
-                            <h4 className="font-medium">
-                              {exp.name || "Unknown Expansion"}
-                            </h4>
-                            <p className="text-sm text-muted-foreground">
-                              Expansion
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
+                        <Card className="bg-background/50 border-muted hover:bg-background/80 transition-colors">
+                          <CardContent className="p-4 flex items-center gap-4">
+                            {imageInfo.shouldShow ? (
+                              <div className="h-16 w-16 relative rounded overflow-hidden flex-shrink-0">
+                                <Image
+                                  src={imageInfo.src}
+                                  alt={imageInfo.alt}
+                                  fill
+                                  className={imageInfo.className}
+                                />
+                                {isItemProcessing(exp) && (
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                    <span className="text-xs text-white font-medium px-1">
+                                      Processing
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                            <div>
+                              <h4 className="font-medium">
+                                {exp.name || "Unknown Expansion"}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                Expansion
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
                     );
                   })
                 ) : (
@@ -391,34 +560,64 @@ export const GameContent = ({ game }: { game: GameType }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-h-[100px]">
                 {game.accessories && game.accessories.length > 0 ? (
                   game.accessories.map((accessory, index) => {
-                    // Assert that accessory is always a GameType
-                    const acc = accessory as GameType;
+                    // Handle populated accessory object
+                    const acc =
+                      typeof accessory === "number"
+                        ? ({ id: accessory } as Partial<Accessory>) // Just ID
+                        : (accessory as Accessory);
+
+                    // Get image info
+                    const imageInfo = getItemImage(acc, "Unknown Accessory");
+
+                    // Check if this is just an ID or still processing
+                    const isProcessing =
+                      typeof accessory === "number" || isItemProcessing(acc);
+
                     return (
                       <Card
                         key={index}
                         className="bg-background/50 border-muted"
                       >
                         <CardContent className="p-4 flex items-center gap-4">
-                          <div className="h-16 w-16 relative rounded overflow-hidden flex-shrink-0">
-                            <Image
-                              src={
-                                acc.images?.[0] &&
-                                typeof acc.images[0] !== "number"
-                                  ? `${(acc.images[0] as Media).sizes?.thumbnail?.url || "/placeholder.svg"}?height=64&width=64`
-                                  : "/placeholder.svg?height=64&width=64"
-                              }
-                              alt={acc.name || "Unknown Accessory"}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
+                          {imageInfo.shouldShow ? (
+                            <div className="h-16 w-16 relative rounded overflow-hidden flex-shrink-0">
+                              <Image
+                                src={imageInfo.src}
+                                alt={imageInfo.alt}
+                                fill
+                                className={imageInfo.className}
+                              />
+                              {isProcessing && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                  <span className="text-xs text-white font-medium px-1">
+                                    Processing
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                           <div>
                             <h4 className="font-medium">
-                              {acc.name || "Unknown Accessory"}
+                              {typeof accessory === "number"
+                                ? `Accessory ID: ${accessory}`
+                                : acc.name || "Unknown Accessory"}
                             </h4>
                             <p className="text-sm text-muted-foreground">
-                              Accessory
+                              {isProcessing
+                                ? "Loading..."
+                                : `${acc.yearPublished ? `(${acc.yearPublished}) ` : ""}Accessory`}
                             </p>
+                            {!isProcessing &&
+                              acc.publishers &&
+                              acc.publishers.length > 0 && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  by{" "}
+                                  {typeof acc.publishers[0] === "number"
+                                    ? "Unknown Publisher"
+                                    : acc.publishers[0].name ||
+                                      "Unknown Publisher"}
+                                </p>
+                              )}
                           </div>
                         </CardContent>
                       </Card>
@@ -427,6 +626,76 @@ export const GameContent = ({ game }: { game: GameType }) => {
                 ) : (
                   <div className="col-span-2 text-center p-4 text-muted-foreground">
                     No accessories available for this game.
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="versions" className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {game.implementations && game.implementations.length > 0 ? (
+                  game.implementations.map((implementation, index) => {
+                    // Handle populated implementation object
+                    const impl =
+                      typeof implementation === "number"
+                        ? ({ id: implementation } as Partial<GameType>) // Just ID
+                        : (implementation as GameType);
+
+                    // Get image info
+                    const imageInfo = getItemImage(impl, "Unknown Version");
+
+                    // Check if this is just an ID or still processing
+                    const isProcessing =
+                      typeof implementation === "number" ||
+                      isItemProcessing(impl);
+
+                    return (
+                      <Link
+                        href={
+                          isProcessing ? "#" : `/games/${impl.bggId || impl.id}`
+                        }
+                        key={index}
+                        className={`block ${isProcessing ? "pointer-events-none" : ""}`}
+                      >
+                        <Card className="bg-background/50 border-muted hover:bg-background/80 transition-colors">
+                          <CardContent className="p-4 flex items-center gap-4">
+                            {imageInfo.shouldShow ? (
+                              <div className="h-16 w-16 relative rounded overflow-hidden flex-shrink-0">
+                                <Image
+                                  src={imageInfo.src}
+                                  alt={imageInfo.alt}
+                                  fill
+                                  className={imageInfo.className}
+                                />
+                                {isProcessing && (
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                    <span className="text-xs text-white font-medium px-1">
+                                      Processing
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                            <div>
+                              <h4 className="font-medium">
+                                {typeof implementation === "number"
+                                  ? `Version ID: ${implementation}`
+                                  : impl.name || "Unknown Version"}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                {isProcessing
+                                  ? "Loading..."
+                                  : `${impl.yearPublished ? `(${impl.yearPublished}) ` : ""}Alternate Version`}
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <div className="col-span-2 text-center p-4 text-muted-foreground">
+                    No alternative versions available for this game.
                   </div>
                 )}
               </div>

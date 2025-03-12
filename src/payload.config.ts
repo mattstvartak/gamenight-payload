@@ -23,7 +23,6 @@ import { Publishers } from "./collections/Publishers";
 import { Types } from "./collections/Types";
 import { UserMedia } from "./collections/UserMedia";
 import { Users } from "./collections/Users";
-import { Expansions } from "./collections/Expansions";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default buildConfig({
@@ -53,7 +52,6 @@ export default buildConfig({
     Artists,
     Categories,
     Designers,
-    Expansions,
     GameNights,
     Games,
     Libraries,

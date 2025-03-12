@@ -4,6 +4,26 @@ import { fetchXMLAndConvertToObject } from "./fetchXMLAndConvertToJson";
 const bggCache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
+// Track the last BGG API call time to implement debouncing
+let lastBggApiCallTime = 0;
+const BGG_API_DEBOUNCE_MS = 500; // 500ms debounce between BGG API calls
+
+/**
+ * Utility function to delay execution to respect BGG API rate limits
+ */
+async function debounceApiBgg() {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastBggApiCallTime;
+
+  if (timeSinceLastCall < BGG_API_DEBOUNCE_MS) {
+    const delayNeeded = BGG_API_DEBOUNCE_MS - timeSinceLastCall;
+    console.log(`Debouncing BGG API call for ${delayNeeded}ms`);
+    await new Promise((resolve) => setTimeout(resolve, delayNeeded));
+  }
+
+  lastBggApiCallTime = Date.now();
+}
+
 /**
  * Fetches game data from BGG API with caching
  * @param bggId The BoardGameGeek ID of the game to fetch
@@ -20,6 +40,9 @@ export async function fetchBggGameData(bggId: string | number) {
     ) {
       return bggCache[cacheKey].data;
     }
+
+    // Apply debouncing to avoid hitting BGG's rate limits
+    await debounceApiBgg();
 
     const data = await fetchXMLAndConvertToObject(
       `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`
@@ -61,6 +84,9 @@ export async function fetchBggPublisherData(publisherId: string | number) {
     ) {
       return bggCache[cacheKey].data;
     }
+
+    // Apply debouncing to avoid hitting BGG's rate limits
+    await debounceApiBgg();
 
     const data = await fetchXMLAndConvertToObject(
       `https://boardgamegeek.com/xmlapi2/family?id=${publisherId}`
@@ -265,22 +291,24 @@ export function formatBggGameData(bggGame: any) {
         : [playerPoll.results];
 
       suggestedPlayerCount = results.map((result: any) => {
-        // Ensure result.result is an array
-        const voteResults = Array.isArray(result.result)
-          ? result.result
-          : [result.result];
+        // Ensure result.result is an array, or default to empty array if undefined
+        const voteResults = result.result
+          ? Array.isArray(result.result)
+            ? result.result
+            : [result.result]
+          : [];
 
         return {
           playerCount: Number(result.numplayers),
           bestCount: Number(
-            voteResults.find((r: any) => r.value === "Best")?.numvotes || 0
+            voteResults.find((r: any) => r?.value === "Best")?.numvotes || 0
           ),
           recommendedCount: Number(
-            voteResults.find((r: any) => r.value === "Recommended")?.numvotes ||
-              0
+            voteResults.find((r: any) => r?.value === "Recommended")
+              ?.numvotes || 0
           ),
           notRecommendedCount: Number(
-            voteResults.find((r: any) => r.value === "Not Recommended")
+            voteResults.find((r: any) => r?.value === "Not Recommended")
               ?.numvotes || 0
           ),
         };
@@ -438,6 +466,9 @@ export async function fetchBggAccessoryData(accessoryId: string | number) {
     ) {
       return bggCache[cacheKey].data;
     }
+
+    // Apply debouncing to avoid hitting BGG's rate limits
+    await debounceApiBgg();
 
     const data = await fetchXMLAndConvertToObject(
       `https://boardgamegeek.com/xmlapi2/thing?id=${accessoryId}`
