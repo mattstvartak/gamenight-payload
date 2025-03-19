@@ -139,5 +139,18 @@ export const Users: CollectionConfig = {
       relationTo: "usermedia",
       unique: true,
     },
+    {
+      name: "likes",
+      type: "relationship",
+      relationTo: [
+        "games",
+        "accessories",
+        "artists",
+        "categories",
+        "designers",
+        "publishers",
+      ],
+      hasMany: true,
+    },
   ],
 };

@@ -382,10 +382,7 @@ export interface Game {
       }[]
     | null;
   languageDependence?: ('0' | '1' | '2' | '3' | '4') | null;
-  /**
-   * Indicates whether the game is still being processed. Set to false when the game and all related content are complete.
-   */
-  processing?: boolean | null;
+  processed?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -553,6 +550,34 @@ export interface User {
   friends?: (number | User)[] | null;
   notes?: (number | Note)[] | null;
   avatar?: (number | null) | Usermedia;
+  likes?:
+    | (
+        | {
+            relationTo: 'games';
+            value: number | Game;
+          }
+        | {
+            relationTo: 'accessories';
+            value: number | Accessory;
+          }
+        | {
+            relationTo: 'artists';
+            value: number | Artist;
+          }
+        | {
+            relationTo: 'categories';
+            value: number | Category;
+          }
+        | {
+            relationTo: 'designers';
+            value: number | Designer;
+          }
+        | {
+            relationTo: 'publishers';
+            value: number | Publisher;
+          }
+      )[]
+    | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -589,11 +614,9 @@ export interface Gamenight {
     [k: string]: unknown;
   } | null;
   date?: string | null;
-  /**
-   * @minItems 2
-   * @maxItems 2
-   */
-  location?: [number, number] | null;
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   players?: (number | User)[] | null;
   games?: (number | Game)[] | null;
   recurring?: boolean | null;
@@ -839,6 +862,8 @@ export interface GamenightsSelect<T extends boolean = true> {
   description?: T;
   date?: T;
   location?: T;
+  latitude?: T;
+  longitude?: T;
   players?: T;
   games?: T;
   recurring?: T;
@@ -889,7 +914,7 @@ export interface GamesSelect<T extends boolean = true> {
         id?: T;
       };
   languageDependence?: T;
-  processing?: T;
+  processed?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1057,6 +1082,7 @@ export interface UsersSelect<T extends boolean = true> {
   friends?: T;
   notes?: T;
   avatar?: T;
+  likes?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

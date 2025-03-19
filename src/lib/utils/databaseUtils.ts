@@ -72,9 +72,6 @@ export async function batchCheckExistence(
   }
 
   // Perform batch query for all IDs we need to check
-  console.log(
-    `Batch checking ${idsToCheck.length} ${collection} items for existence`
-  );
   try {
     const response = await payload.find({
       collection,
